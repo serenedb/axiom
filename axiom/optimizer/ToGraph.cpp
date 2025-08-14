@@ -220,7 +220,7 @@ void ToGraph::getExprForField(
       auto it = renames_.find(name);
       VELOX_CHECK(it != renames_.end());
       auto maybeColumn = it->second;
-      VELOX_CHECK_EQ(maybeColumn->type(), PlanType::kColumnExpr);
+      VELOX_CHECK(maybeColumn->type() == PlanType::kColumnExpr);
       resultColumn = maybeColumn->as<Column>();
       resultExpr = nullptr;
       context = nullptr;
@@ -1372,7 +1372,7 @@ void ToGraph::makeUnionDistributionAndStats(
     DerivedTableP innerDt) {
   if (setDt->distribution == nullptr) {
     DistributionType empty;
-    setDt->distribution = make<Distribution>(empty, 0, ExprVector{});
+    setDt->distribution = make<Distribution>(empty, 0.F, ExprVector{});
   }
   if (innerDt == nullptr) {
     innerDt = setDt;

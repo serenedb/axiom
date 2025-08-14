@@ -763,8 +763,8 @@ RelationOpPtr repartitionForAgg(const RelationOpPtr& plan, PlanState& state) {
   // final agg.
   if (agg->groupingKeys().empty() &&
       !plan->distribution().distributionType.isGather) {
-    auto* gather =
-        make<Repartition>(plan, Distribution::gather(), plan->columns());
+    auto gather =
+        makePtr<Repartition>(plan, Distribution::gather(), plan->columns());
     state.addCost(*gather);
     return gather;
   }
@@ -792,8 +792,8 @@ RelationOpPtr repartitionForAgg(const RelationOpPtr& plan, PlanState& state) {
       plan->distribution().distributionType,
       plan->resultCardinality(),
       std::move(keyValues));
-  auto* repartition =
-      make<Repartition>(plan, std::move(distribution), plan->columns());
+  auto repartition =
+      makePtr<Repartition>(plan, std::move(distribution), plan->columns());
   state.addCost(*repartition);
   return repartition;
 }
@@ -807,8 +807,8 @@ void Optimization::addPostprocess(
   if (dt->aggregation) {
     const auto& aggPlan = dt->aggregation;
 
-    auto* partialAgg = make<Aggregation>(
-        plan,
+    auto partialAgg = makePtr<Aggregation>(
+        std::move(plan),
         aggPlan->groupingKeys(),
         aggPlan->aggregates(),
         core::AggregationNode::Step::kPartial,
@@ -823,35 +823,40 @@ void Optimization::addPostprocess(
       finalGroupingKeys.push_back(aggPlan->intermediateColumns()[i]);
     }
 
-    auto* finalAgg = make<Aggregation>(
-        plan,
-        finalGroupingKeys,
+    auto finalAgg = makePtr<Aggregation>(
+        std::move(plan),
+        std::move(finalGroupingKeys),
         aggPlan->aggregates(),
         core::AggregationNode::Step::kFinal,
         aggPlan->columns());
 
     state.addCost(*finalAgg);
-    plan = finalAgg;
+    plan = std::move(finalAgg);
   }
   if (!dt->having.empty()) {
-    auto filter = make<Filter>(plan, dt->having);
+    auto filter = makePtr<Filter>(std::move(plan), dt->having);
     state.addCost(*filter);
-    plan = filter;
+    plan = std::move(filter);
   }
   if (dt->hasOrderBy()) {
-    auto* orderBy = make<OrderBy>(
-        plan, dt->orderByKeys, dt->orderByTypes, dt->limit, dt->offset);
+    auto orderBy = makePtr<OrderBy>(
+        std::move(plan),
+        dt->orderByKeys,
+        dt->orderByTypes,
+        dt->limit,
+        dt->offset);
     state.addCost(*orderBy);
-    plan = orderBy;
+    plan = std::move(orderBy);
   }
   if (!dt->columns.empty()) {
-    auto* project = make<Project>(plan, dt->exprs, dt->columns);
-    plan = project;
+    auto project = makePtr<Project>(std::move(plan), dt->exprs, dt->columns);
+    // TODO: addCost or explain why isn't it needed?
+    plan = std::move(project);
   }
   if (!dt->hasOrderBy() && dt->hasLimit()) {
-    auto limit = make<Limit>(plan, dt->limit, dt->offset);
+    auto limit = makePtr<Limit>(std::move(plan), dt->limit, dt->offset);
     state.addCost(*limit);
-    plan = limit;
+    plan = std::move(limit);
   }
 }
 
@@ -937,8 +942,8 @@ RelationOpPtr repartitionForIndex(
       info.index->distribution().distributionType,
       plan->resultCardinality(),
       std::move(keyExprs));
-  auto* repartition =
-      make<Repartition>(plan, std::move(distribution), plan->columns());
+  auto repartition =
+      makePtr<Repartition>(plan, std::move(distribution), plan->columns());
   state.addCost(*repartition);
   return repartition;
 }
@@ -1012,7 +1017,7 @@ void Optimization::joinByIndex(
     ColumnVector columns;
     c.forEach([&](PlanObjectCP o) { columns.push_back(o->as<Column>()); });
 
-    auto* scan = make<TableScan>(
+    auto scan = makePtr<TableScan>(
         newPartition,
         newPartition->distribution(),
         rightTable,
@@ -1025,7 +1030,7 @@ void Optimization::joinByIndex(
 
     state.columns.unionSet(c);
     state.addCost(*scan);
-    state.addNextJoin(&candidate, scan, {}, toTry);
+    state.addNextJoin(&candidate, std::move(scan), {}, toTry);
   }
 }
 
@@ -1085,10 +1090,10 @@ void alignJoinSides(
         otherInput->distribution().distributionType,
         input->resultCardinality(),
         keys);
-    auto* repartition =
-        make<Repartition>(input, distribution, input->columns());
+    auto repartition =
+        makePtr<Repartition>(input, distribution, input->columns());
     state.addCost(*repartition);
-    input = repartition;
+    input = std::move(repartition);
   }
 
   ExprVector distColumns;
@@ -1106,7 +1111,7 @@ void alignJoinSides(
       input->distribution().distributionType,
       otherInput->resultCardinality(),
       std::move(distColumns));
-  auto* repartition = make<Repartition>(
+  auto repartition = makePtr<Repartition>(
       otherInput, std::move(distribution), otherInput->columns());
   otherState.addCost(*repartition);
   otherInput = repartition;
@@ -1191,21 +1196,21 @@ void Optimization::joinByHash(
         }
         Distribution distribution(
             plan->distribution().distributionType, 0, copartition);
-        auto* repartition =
-            make<Repartition>(buildInput, distribution, buildInput->columns());
+        auto repartition = makePtr<Repartition>(
+            buildInput, distribution, buildInput->columns());
         buildState.addCost(*repartition);
-        buildInput = repartition;
+        buildInput = std::move(repartition);
       }
     } else if (
         candidate.join->isBroadcastableType() &&
         isBroadcastableSize(buildPlan, state)) {
-      auto* broadcast = make<Repartition>(
+      auto broadcast = makePtr<Repartition>(
           buildInput,
           Distribution::broadcast(
               plan->distribution().distributionType, plan->resultCardinality()),
           buildInput->columns());
       buildState.addCost(*broadcast);
-      buildInput = broadcast;
+      buildInput = std::move(broadcast);
     } else {
       // The probe gets shuffled to align with build. If build is not
       // partitioned on its keys, shuffle the build too.
@@ -1214,8 +1219,8 @@ void Optimization::joinByHash(
     }
   }
 
-  auto* buildOp =
-      make<HashBuild>(buildInput, ++buildCounter_, build.keys, buildPlan);
+  auto buildOp =
+      makePtr<HashBuild>(buildInput, ++buildCounter_, build.keys, buildPlan);
   buildState.addCost(*buildOp);
 
   ColumnVector columns;
@@ -1237,7 +1242,7 @@ void Optimization::joinByHash(
       columnSet.add(object);
       return;
     }
-    if (!(!probeOnly && buildColumns.contains(column)) &&
+    if ((probeOnly || !buildColumns.contains(column)) &&
         !probeColumns.contains(column)) {
       return;
     }
@@ -1253,7 +1258,7 @@ void Optimization::joinByHash(
   }
   state.columns = columnSet;
   const auto fanout = fanoutJoinTypeLimit(joinType, candidate.fanout);
-  auto* join = make<Join>(
+  auto join = makePtr<Join>(
       JoinMethod::kHash,
       joinType,
       probeInput,
@@ -1268,7 +1273,7 @@ void Optimization::joinByHash(
   state.cost.totalBytes += buildState.cost.totalBytes;
   state.cost.transferBytes += buildState.cost.transferBytes;
   join->buildCost = buildState.cost;
-  state.addNextJoin(&candidate, join, {buildOp}, toTry);
+  state.addNextJoin(&candidate, join, {buildOp.get()}, toTry);
 }
 
 core::JoinType reverseJoinType(core::JoinType joinType) {
@@ -1341,8 +1346,8 @@ void Optimization::joinByHashRight(
         probeInput, probe.keys, probeState, buildInput, build.keys, state);
   }
 
-  auto* buildOp =
-      make<HashBuild>(buildInput, ++buildCounter_, build.keys, nullptr);
+  auto buildOp =
+      makePtr<HashBuild>(buildInput, ++buildCounter_, build.keys, nullptr);
   state.addCost(*buildOp);
 
   PlanObjectSet buildColumns;
@@ -1365,13 +1370,13 @@ void Optimization::joinByHashRight(
   ColumnCP mark = nullptr;
 
   state.downstreamColumns().forEach([&](auto object) {
-    auto column = reinterpret_cast<ColumnCP>(object);
+    const auto* column = reinterpret_cast<ColumnCP>(object);
     if (column == probe.markColumn) {
       mark = column;
       return;
     }
     if (!buildColumns.contains(column) &&
-        !(!buildOnly && probeColumns.contains(column))) {
+        (buildOnly || !probeColumns.contains(column))) {
       return;
     }
     columnSet.add(object);
@@ -1390,7 +1395,7 @@ void Optimization::joinByHashRight(
   state.cost = probeState.cost;
   state.cost.setupCost += buildCost;
 
-  auto* join = make<Join>(
+  auto join = makePtr<Join>(
       JoinMethod::kHash,
       rightJoinType,
       probeInput,
@@ -1402,7 +1407,7 @@ void Optimization::joinByHashRight(
       std::move(columns));
   state.addCost(*join);
 
-  state.addNextJoin(&candidate, join, {buildOp}, toTry);
+  state.addNextJoin(&candidate, join, {buildOp.get()}, toTry);
 }
 
 void Optimization::crossJoin(
@@ -1503,7 +1508,7 @@ RelationOpPtr Optimization::placeSingleRowDt(
 
   auto rightOp = rightPlan->op;
   if (needsShuffle) {
-    rightOp = make<Repartition>(rightOp, broadcast, rightOp->columns());
+    rightOp = makePtr<Repartition>(rightOp, broadcast, rightOp->columns());
   }
 
   auto resultColumns = plan->columns();
@@ -1511,7 +1516,7 @@ RelationOpPtr Optimization::placeSingleRowDt(
       resultColumns.end(),
       rightOp->columns().begin(),
       rightOp->columns().end());
-  auto* join = make<Join>(
+  auto join = makePtr<Join>(
       JoinMethod::kCross,
       core::JoinType::kInner,
       std::move(plan),
@@ -1519,7 +1524,7 @@ RelationOpPtr Optimization::placeSingleRowDt(
       ExprVector{},
       ExprVector{},
       ExprVector{filter},
-      0.5,
+      0.5F,
       std::move(resultColumns));
   state.addCost(*join);
   return join;
@@ -1636,7 +1641,7 @@ bool Optimization::placeConjuncts(
     for (auto& filter : filters) {
       state.placed.add(filter);
     }
-    auto* filter = make<Filter>(plan, std::move(filters));
+    auto filter = makePtr<Filter>(std::move(plan), std::move(filters));
     state.addCost(*filter);
     makeJoins(filter, state);
     return true;
@@ -1690,7 +1695,7 @@ void Optimization::makeJoins(RelationOpPtr plan, PlanState& state) {
           state.columns.unionObjects(columns);
           auto distribution =
               TableScan::outputDistribution(table, index, columns);
-          auto* scan = make<TableScan>(
+          auto scan = makePtr<TableScan>(
               nullptr,
               std::move(distribution),
               table,
@@ -1698,7 +1703,7 @@ void Optimization::makeJoins(RelationOpPtr plan, PlanState& state) {
               index->distribution().cardinality * table->filterSelectivity,
               std::move(columns));
           state.addCost(*scan);
-          makeJoins(scan, state);
+          makeJoins(std::move(scan), state);
         }
       } else if (from->type() == PlanType::kValuesTableNode) {
         const auto* valuesTable = from->as<ValuesTable>();
@@ -1713,9 +1718,9 @@ void Optimization::makeJoins(RelationOpPtr plan, PlanState& state) {
         PlanStateSaver save{state};
         state.placed.add(valuesTable);
         state.columns.unionObjects(columns);
-        auto* scan = make<Values>(*valuesTable, std::move(columns));
+        auto scan = makePtr<Values>(*valuesTable, std::move(columns));
         state.addCost(*scan);
-        makeJoins(scan, state);
+        makeJoins(std::move(scan), state);
       } else {
         // Start with a derived table.
         placeDerivedTable(from->as<const DerivedTable>(), state);
@@ -1755,18 +1760,21 @@ void Optimization::makeJoins(RelationOpPtr plan, PlanState& state) {
 }
 
 namespace {
-RelationOpPtr makeDistinct(const RelationOpPtr& input) {
+RelationOpPtr makeDistinct(RelationOpPtr input) {
+  auto columns = input->columns();
+
   ExprVector groupingKeys;
-  for (const auto& column : input->columns()) {
+  groupingKeys.reserve(columns.size());
+  for (const auto& column : columns) {
     groupingKeys.push_back(column);
   }
 
-  return make<Aggregation>(
-      input,
-      groupingKeys,
+  return makePtr<Aggregation>(
+      std::move(input),
+      std::move(groupingKeys),
       AggregateVector{},
-      velox::core::AggregationNode::Step::kSingle,
-      input->columns());
+      core::AggregationNode::Step::kSingle,
+      std::move(columns));
 }
 
 Distribution somePartition(const RelationOpPtrVector& inputs) {
@@ -1870,7 +1878,7 @@ PlanPtr Optimization::makePlan(
     const bool isDistinct =
         setDt->setOp.value() == logical_plan::SetOperation::kUnion;
     if (isSingle_) {
-      RelationOpPtr result = make<UnionAll>(inputs);
+      RelationOpPtr result = makePtr<UnionAll>(inputs);
       Aggregation* distinct = nullptr;
       if (isDistinct) {
         result = makeDistinct(result);
@@ -1884,7 +1892,7 @@ PlanPtr Optimization::makePlan(
         // Pick some partitioning key and shuffle on that and make distinct.
         Distribution someDistribution = somePartition(inputs);
         for (auto i = 0; i < inputs.size(); ++i) {
-          inputs[i] = make<Repartition>(
+          inputs[i] = makePtr<Repartition>(
               inputs[i], someDistribution, inputs[i]->columns());
           inputStates[i].addCost(*inputs[i]);
         }
@@ -1894,15 +1902,15 @@ PlanPtr Optimization::makePlan(
       // return with no shuffle needed.
       for (auto i = 0; i < inputs.size(); ++i) {
         if (inputNeedsShuffle[i]) {
-          inputs[i] =
-              make<Repartition>(inputs[i], distribution, inputs[i]->columns());
+          inputs[i] = makePtr<Repartition>(
+              inputs[i], distribution, inputs[i]->columns());
           inputStates[i].addCost(*inputs[i]);
         }
       }
     }
     needsShuffle = false;
 
-    RelationOpPtr result = make<UnionAll>(inputs);
+    RelationOpPtr result = makePtr<UnionAll>(inputs);
     Aggregation* distinct = nullptr;
     if (isDistinct) {
       result = makeDistinct(result);

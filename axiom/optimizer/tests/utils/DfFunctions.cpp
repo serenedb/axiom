@@ -69,13 +69,14 @@ std::pair<std::vector<Step>, int32_t> makeRowFromMapSubfield(
 
   auto newFields = steps;
   newFields.pop_back();
-  newFields.push_back(optimizer::Step{
+  newFields.push_back({
       .kind = optimizer::StepKind::kSubscript,
-      .id = call.inputAt(1)
-                ->asUnchecked<lp::ConstantExpr>()
-                ->value()
-                ->value<TypeKind::ARRAY>()[found]
-                .value<int32_t>()});
+      .id = static_cast<uint32_t>(call.inputAt(1)
+                                      ->asUnchecked<lp::ConstantExpr>()
+                                      ->value()
+                                      ->value<TypeKind::ARRAY>()[found]
+                                      .value<int32_t>()),
+  });
   return std::make_pair(newFields, 0);
 }
 

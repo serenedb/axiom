@@ -272,8 +272,6 @@ class Repartition : public RelationOp {
   std::string toString(bool recursive, bool detail) const override;
 };
 
-using RepartitionCP = const Repartition*;
-
 /// Represents a usually multitable filter not associated with any non-inner
 /// join. Non-equality constraints over inner joins become Filters.
 class Filter : public RelationOp {
@@ -337,8 +335,6 @@ struct Join : public RelationOp {
   std::string toString(bool recursive, bool detail) const override;
 };
 
-using JoinCP = const Join*;
-
 /// Occurs as right input of JoinOp with type kHash. Contains the
 /// cost and memory specific to building the table. Can be
 /// referenced from multiple JoinOps. The unit cost * input
@@ -390,8 +386,6 @@ struct OrderBy : public RelationOp {
   std::string toString(bool recursive, bool detail) const override;
 };
 
-using OrderByCP = const OrderBy*;
-
 /// Represents a union all.
 struct UnionAll : public RelationOp {
   explicit UnionAll(RelationOpPtrVector inputs);
@@ -402,8 +396,6 @@ struct UnionAll : public RelationOp {
 
   const RelationOpPtrVector inputs;
 };
-
-using UnionAllCP = const UnionAll*;
 
 struct Limit : public RelationOp {
   Limit(RelationOpPtr input, int64_t limit, int64_t offset);
@@ -418,7 +410,5 @@ struct Limit : public RelationOp {
 
   std::string toString(bool recursive, bool detail) const override;
 };
-
-using LimitCP = const Limit*;
 
 } // namespace facebook::velox::optimizer

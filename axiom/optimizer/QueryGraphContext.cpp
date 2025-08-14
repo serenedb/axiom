@@ -54,14 +54,14 @@ TypePtr QueryGraphContext::dedupType(const TypePtr& type) {
   if (it != deduppedTypes_.end()) {
     return *it;
   }
-  auto size = type->size();
+  const auto size = type->size();
   if (size == 0) {
     deduppedTypes_.insert(type);
     toTypePtr_[type.get()] = type;
     return type;
   }
   std::vector<TypePtr> children;
-  for (auto i = 0; i < size; ++i) {
+  for (uint32_t i = 0; i < size; ++i) {
     children.push_back(dedupType(type->childAt(i)));
   }
   TypePtr newType;
@@ -75,19 +75,18 @@ TypePtr QueryGraphContext::dedupType(const TypePtr& type) {
       break;
     }
     case TypeKind::ARRAY:
-      newType = ARRAY(children[0]);
+      newType = ARRAY(std::move(children[0]));
       break;
     case TypeKind::MAP:
-      newType = MAP(children[0], children[1]);
+      newType = MAP(std::move(children[0]), std::move(children[1]));
       break;
     case TypeKind::FUNCTION: {
-      auto args = children;
-      args.pop_back();
-      newType =
-          std::make_shared<FunctionType>(std::move(args), children.back());
+      auto returnType = std::move(children.back());
+      children.pop_back();
+      newType = FUNCTION(std::move(children), std::move(returnType));
     } break;
     default:
-      VELOX_FAIL("Type has size > 0 and is not row/array/map");
+      VELOX_FAIL("Type has size > 0 and is not row/array/map/function");
   }
   deduppedTypes_.insert(newType);
   toTypePtr_[newType.get()] = newType;

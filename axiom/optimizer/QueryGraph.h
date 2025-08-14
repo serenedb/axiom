@@ -229,7 +229,7 @@ class Field : public Expr {
     subexpressions_ = base->subexpressions();
   }
 
-  Field(const Type* type, ExprCP base, int32_t index)
+  Field(const Type* type, ExprCP base, uint32_t index)
       : Expr(PlanType::kFieldExpr, Value(type, 1)),
         field_(nullptr),
         index_(index),
@@ -242,7 +242,7 @@ class Field : public Expr {
     return field_;
   }
 
-  int32_t index() const {
+  uint32_t index() const {
     return index_;
   }
 
@@ -254,7 +254,7 @@ class Field : public Expr {
 
  private:
   Name field_;
-  int32_t index_;
+  uint32_t index_;
   ExprCP base_;
 };
 

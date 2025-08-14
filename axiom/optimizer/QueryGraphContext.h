@@ -70,6 +70,7 @@ struct TypeComparer {
 Name toName(std::string_view string);
 
 struct Plan;
+// TODO: rename to PlanP
 using PlanPtr = Plan*;
 class Optimization;
 
@@ -105,7 +106,7 @@ enum class StepKind : uint8_t { kField, kSubscript, kCardinality };
 struct Step {
   StepKind kind;
   Name field{nullptr};
-  int64_t id{0};
+  uint32_t id{0};
   /// True if all fields/keys are accessed at this level but there is a subset
   /// of fields accessed at a child level.
   bool allFields{false};
@@ -144,7 +145,7 @@ class Path {
     return this;
   }
 
-  Path* subscript(int64_t id) {
+  Path* subscript(uint32_t id) {
     VELOX_CHECK(mutable_);
     steps_.push_back(Step{.kind = StepKind::kSubscript, .id = id});
     return this;
@@ -377,15 +378,15 @@ void QGAllocator<T>::deallocate(T* p, std::size_t /*n*/) noexcept {
   queryCtx()->free(p);
 }
 
-template <class _Tp, class... _Args>
-inline _Tp* make(_Args&&... __args) {
-  return new (queryCtx()->allocate(sizeof(_Tp)))
-      _Tp(std::forward<_Args>(__args)...);
+template <class T, class... Args>
+T* make(Args&&... args) {
+  return new (queryCtx()->allocate(sizeof(T))) T{std::forward<Args>(args)...};
 }
 
-/// Macro to use instead of make() when make() errors out from too
-/// many arguments.
-#define QGC_MAKE_IN_ARENA(_Tp) new (queryCtx()->allocate(sizeof(_Tp))) _Tp
+template <class T, class... Args>
+boost::intrusive_ptr<T> makePtr(Args&&... args) {
+  return make<T>(std::forward<Args>(args)...);
+}
 
 /// Shorthand for toType() in thread's QueryGraphContext.
 const Type* toType(const TypePtr& type);

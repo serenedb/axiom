@@ -237,8 +237,11 @@ void ToGraph::markSubfields(
       name = toName(fieldName);
     }
 
-    steps.push_back(
-        {.kind = StepKind::kField, .field = name, .id = fieldIndex.value()});
+    steps.push_back({
+        .kind = StepKind::kField,
+        .field = name,
+        .id = static_cast<uint32_t>(fieldIndex.value()),
+    });
     markSubfields(input, steps, isControl, context, sources);
     steps.pop_back();
     return;
@@ -269,8 +272,9 @@ void ToGraph::markSubfields(
         const auto& str = value->value<TypeKind::VARCHAR>();
         steps.push_back({.kind = StepKind::kSubscript, .field = toName(str)});
       } else {
-        const auto& id = integerValue(value.get());
-        steps.push_back({.kind = StepKind::kSubscript, .id = id});
+        const auto id = integerValue(value.get());
+        steps.push_back(
+            {.kind = StepKind::kSubscript, .id = static_cast<uint32_t>(id)});
       }
 
       markSubfields(expr->inputAt(0), steps, isControl, context, sources);

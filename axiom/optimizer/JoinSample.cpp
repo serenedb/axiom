@@ -141,7 +141,7 @@ std::shared_ptr<runner::Runner> prepareSampleRunner(
   sampleColumns.forEach(
       [&](PlanObjectCP c) { columns.push_back(c->as<Column>()); });
   auto index = base->chooseLeafIndex()[0];
-  auto* scan = make<TableScan>(
+  auto scan = makePtr<TableScan>(
       nullptr,
       TableScan::outputDistribution(base, index, columns),
       base,
@@ -165,8 +165,8 @@ std::shared_ptr<runner::Runner> prepareSampleRunner(
   }
   ColumnCP hashCol =
       make<Column>(toName("hash"), nullptr, bigintValue(), nullptr);
-  RelationOpPtr proj =
-      make<Project>(scan, ExprVector{hash}, ColumnVector{hashCol});
+  auto proj = makePtr<Project>(
+      std::move(scan), ExprVector{hash}, ColumnVector{hashCol});
   ExprCP hashMod = make<Call>(
       toName("mod"),
       bigintValue(),
@@ -177,14 +177,14 @@ std::shared_ptr<runner::Runner> prepareSampleRunner(
       Value(toType(BOOLEAN()), 1),
       ExprVector{hashMod, bigintLit(lim)},
       FunctionSet());
-  RelationOpPtr filter = make<Filter>(proj, ExprVector{filterExpr});
+  auto filter = makePtr<Filter>(std::move(proj), ExprVector{filterExpr});
 
-  runner::MultiFragmentPlan::Options& options =
-      queryCtx()->optimization()->options();
-  auto plan = queryCtx()->optimization()->toVeloxPlan(filter, options);
+  auto* optimization = queryCtx()->optimization();
+  runner::MultiFragmentPlan::Options& options = optimization->options();
+  auto plan = optimization->toVeloxPlan(std::move(filter), options);
   return std::make_shared<runner::LocalRunner>(
-      plan.plan,
-      sampleQueryCtx(queryCtx()->optimization()->queryCtxShared()),
+      std::move(plan.plan),
+      sampleQueryCtx(optimization->queryCtxShared()),
       std::make_shared<connector::ConnectorSplitSourceFactory>());
 }
 
