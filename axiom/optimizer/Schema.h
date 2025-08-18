@@ -242,6 +242,7 @@ enum class RelType {
   kUnionAll,
   kLimit,
   kValues,
+  kUnnest,
 };
 
 /// Represents a relation (table) that is either physically stored or is the

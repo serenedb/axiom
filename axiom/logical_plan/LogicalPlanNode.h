@@ -602,16 +602,16 @@ using SetNodePtr = std::shared_ptr<const SetNode>;
 /// optional ordinality column of type BIGINT.
 class UnnestNode : public LogicalPlanNode {
  public:
+  /// @param unnestExpressions One or more expressions that produce ARRAYs
+  /// or MAPs.
+  /// @param unnestedNames Names to use for expanded relations. Must align
+  /// with 'unnestExpressions'. Each ARRAY requires one name. Each MAP
+  /// requires two maps. If 'flattenArrayOfRows' is true, each ARRAY(ROW)
+  /// requires as many names as there are fields in the ROW.
+  /// @param ordinalityName Optional name for the ordinality output column.
+  /// If not specified, ordinality column is not added. Ordinality is
+  /// 1-based.
   UnnestNode(
-      /// @param unnestExpressions One or more expressions that produce ARRAYs
-      /// or MAPs.
-      /// @param unnestedNames Names to use for expanded relations. Must align
-      /// with 'unnestExpressions'. Each ARRAY requires one name. Each MAP
-      /// requires two maps. If 'flattenArrayOfRows' is true, each ARRAY(ROW)
-      /// requires as many names as there are fields in the ROW.
-      /// @param ordinalityName Optional name for the ordinality output column.
-      /// If not specified, ordinality column is not added. Ordinality is
-      /// 1-based.
       const std::string& id,
       const LogicalPlanNodePtr& input,
       const std::vector<ExprPtr>& unnestExpressions,
@@ -635,6 +635,9 @@ class UnnestNode : public LogicalPlanNode {
     if (ordinalityName.has_value()) {
       VELOX_USER_CHECK(
           !ordinalityName->empty(), "Ordinality column name must be not empty");
+    }
+    if (flattenArrayOfRows_) {
+      VELOX_NYI("Unnesting ARRAY(ROW) is not yet supported");
     }
   }
 
