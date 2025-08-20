@@ -16,8 +16,7 @@ add_subdirectory(tpch)
 
 add_subdirectory(tests)
 
-velox_add_library(velox_connector_metadata ConnectorMetadata.cpp
-                  StatisticsBuilder.cpp)
+velox_add_library(velox_connector_metadata ConnectorMetadata.cpp)
 
 velox_link_libraries(
   velox_connector_metadata
