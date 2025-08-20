@@ -174,7 +174,7 @@ void predictionWarnings(
   } else {
     float ratio =
         static_cast<float>(actualRows) / static_cast<float>(predictedRows);
-    auto threshold = FLAGS_cardinality_warning_threshold;
+    float threshold = FLAGS_cardinality_warning_threshold;
     if (ratio < 1 / threshold || ratio > threshold) {
       logPrediction(fmt::format(
           "Node {} actual={} predicted={} key={}",
