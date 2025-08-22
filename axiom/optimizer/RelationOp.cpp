@@ -485,12 +485,25 @@ std::string Repartition::toString(bool recursive, bool detail) const {
   return out.str();
 }
 
+namespace {
+ColumnVector unionColumns(const ColumnVector& lhs, const ColumnVector& rhs) {
+  ColumnVector result;
+  result.reserve(lhs.size() + rhs.size());
+  result.insert(result.end(), lhs.begin(), lhs.end());
+  result.insert(result.end(), rhs.begin(), rhs.end());
+  return result;
+}
+} // namespace
+
 Unnest::Unnest(
     RelationOpPtr input,
+    ColumnVector replicateColumns,
     ExprVector unnestExprs,
     ColumnVector unnestedColumns)
-    : RelationOp{RelType::kUnnest, input, input->distribution(), std::move(unnestedColumns)},
-      unnestExprs{std::move(unnestExprs)} {}
+    : RelationOp{RelType::kUnnest, input, input->distribution(), unionColumns(replicateColumns, unnestedColumns)},
+      replicateColumns{std::move(replicateColumns)},
+      unnestExprs{std::move(unnestExprs)},
+      unnestedColumns{std::move(unnestedColumns)} {}
 
 Aggregation::Aggregation(
     RelationOpPtr input,
@@ -536,6 +549,15 @@ std::string Unnest::toString(bool recursive, bool detail) const {
   }
   out << "unnest ";
   printCost(detail, out);
+  if (detail) {
+    out << "replicate columns: "
+        << itemsToString(replicateColumns.data(), replicateColumns.size());
+    out << ", unnest exprs: "
+        << itemsToString(unnestExprs.data(), unnestExprs.size());
+    out << ", unnested columns: "
+        << itemsToString(unnestedColumns.data(), unnestedColumns.size())
+        << std::endl;
+  }
   return out.str();
 }
 
