@@ -340,14 +340,13 @@ Join::Join(
   cost_.inputCardinality = inputCardinality();
   cost_.fanout = fanout;
 
-  bool isCrossJoin = _leftKeys.empty() && rightKeys.empty();
-  if (isCrossJoin) {
+  if (method == JoinMethod::kCross) {
     return;
   }
 
   float buildSize = right->cost().inputCardinality;
   auto rowCost =
-      right->columns().size() * Costs::kHashExtractColumnCost;
+      right->input()->columns().size() * Costs::kHashExtractColumnCost;
   cost_.unitCost = Costs::hashProbeCost(buildSize) + cost_.fanout * rowCost +
       leftKeys.size() * Costs::kHashColumnCost;
 }
