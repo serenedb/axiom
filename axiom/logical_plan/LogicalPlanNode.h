@@ -354,7 +354,6 @@ class AggregateNode : public LogicalPlanNode {
 
   const std::vector<std::string>& outputNames() const {
     return outputNames_;
-    ;
   }
 
   const std::vector<AggregateExprPtr>& aggregates() const {

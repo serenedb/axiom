@@ -236,9 +236,9 @@ class ToGraph {
   // Converts 'plan' to PlanObjects and records join edges into
   // 'currentDt_'. If 'node' does not match  allowedInDt, wraps 'node' in
   // a new DerivedTable.
-  PlanObjectP makeQueryGraph(
+  void addToQueryGraph(
       const logical_plan::LogicalPlanNode& node,
-      uint64_t allowedInDt);
+      bool separateAggregation);
 
   PlanObjectCP findLeaf(const logical_plan::LogicalPlanNode* node) {
     auto* leaf = planLeaves_[node];
@@ -308,9 +308,9 @@ class ToGraph {
   void translateConjuncts(const logical_plan::ExprPtr& input, ExprVector& flat);
 
   // Adds a JoinEdge corresponding to 'join' to the enclosing DerivedTable.
-  void translateJoin(const logical_plan::JoinNode& join);
+  void addJoin(const logical_plan::JoinNode& join);
 
-  DerivedTableP translateSetJoin(
+  DerivedTableP addSetJoin(
       const logical_plan::SetNode& set,
       DerivedTableP setDt);
 
@@ -321,7 +321,7 @@ class ToGraph {
       DerivedTableP setDt,
       DerivedTableP innerDt = nullptr);
 
-  DerivedTableP translateUnion(
+  DerivedTableP addUnion(
       const logical_plan::SetNode& set,
       DerivedTableP setDt,
       bool isTopLevel,
@@ -330,19 +330,19 @@ class ToGraph {
   AggregationPlanCP translateAggregation(
       const logical_plan::AggregateNode& aggregation);
 
-  PlanObjectP addProjection(const logical_plan::ProjectNode* project);
+  void addProjection(const logical_plan::ProjectNode& project);
 
   // Interprets a Filter node and adds its information into the DerivedTable
   // being assembled.
-  PlanObjectP addFilter(const logical_plan::FilterNode* Filter);
+  void addFilter(const logical_plan::FilterNode& filter);
 
   // Interprets an AggregationNode and adds its information to the
   // DerivedTable being assembled.
-  PlanObjectP addAggregation(const logical_plan::AggregateNode& aggNode);
+  void addAggregation(const logical_plan::AggregateNode& aggNode);
 
-  PlanObjectP addLimit(const logical_plan::LimitNode& limitNode);
+  void addLimit(const logical_plan::LimitNode& limitNode);
 
-  PlanObjectP addOrderBy(const logical_plan::SortNode& order);
+  void addOrderBy(const logical_plan::SortNode& order);
 
   bool isSubfield(
       const logical_plan::Expr* expr,
@@ -408,9 +408,9 @@ class ToGraph {
   // Calls translateSubfieldFunction() if not already called.
   void ensureFunctionSubfields(const logical_plan::ExprPtr& expr);
 
-  PlanObjectP makeBaseTable(const logical_plan::TableScanNode& tableScan);
+  void addBaseTable(const logical_plan::TableScanNode& tableScan);
 
-  PlanObjectP makeValuesTable(const logical_plan::ValuesNode& values);
+  void addValuesTable(const logical_plan::ValuesNode& values);
 
   // Decomposes complex type columns into parts projected out as top
   // level if subfield pushdown is on.
@@ -437,8 +437,6 @@ class ToGraph {
 
   DerivedTableP newDt();
 
-  static constexpr uint64_t kAllAllowedInDt = ~0UL;
-
   const Schema& schema_;
 
   core::ExpressionEvaluator& evaluator_;
@@ -447,9 +445,6 @@ class ToGraph {
 
   // Innermost DerivedTable when making a QueryGraph from PlanNode.
   DerivedTableP currentDt_;
-
-  // True if wrapping a nondeterministic filter inside a DT in ToGraph.
-  bool isNondeterministicWrap_{false};
 
   // Source PlanNode when inside addProjection() or 'addFilter().
   const logical_plan::LogicalPlanNode* exprSource_{nullptr};
