@@ -1488,13 +1488,12 @@ void ToGraph::addToQueryGraph(
       const auto& filter = *node.asUnchecked<lp::FilterNode>();
       // Force wrap the filter and its input inside a dt so the filter
       // does not get mixed with parent nodes.
-      const bool nondeterministic = hasNondeterministic(filter.predicate());
       addToQueryGraph(*node.onlyInput(), separateAggregation);
-      if (nondeterministic || currentDt_->hasLimit()) {
+      if (currentDt_->hasLimit()) {
         finalizeDt(*node.onlyInput());
       }
       addFilter(filter);
-      if (nondeterministic) {
+      if (hasNondeterministic(filter.predicate())) {
         finalizeDt(node);
       }
     } break;
