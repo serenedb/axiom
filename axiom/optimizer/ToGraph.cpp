@@ -74,7 +74,8 @@ void ToGraph::setDtOutput(
     dt->exprs.push_back(inner);
 
     Value value(toType(type), 0);
-    auto* outer = make<Column>(toName(name), dt, value, toName(name));
+    const auto* columnName = toName(name);
+    auto* outer = make<Column>(columnName, dt, value, columnName);
     dt->columns.push_back(outer);
     renames_[name] = outer;
   }
@@ -90,8 +91,9 @@ void ToGraph::setDtUsedOutput(
     const auto* inner = translateColumn(name);
     dt->exprs.push_back(inner);
 
+    const auto* columnName = toName(name);
     const auto* outer =
-        make<Column>(toName(name), dt, inner->value(), toName(name));
+        make<Column>(columnName, dt, inner->value(), columnName);
     dt->columns.push_back(outer);
     renames_[name] = outer;
   }
@@ -829,6 +831,46 @@ ExprVector ToGraph::translateColumns(const std::vector<lp::ExprPtr>& source) {
   return result;
 }
 
+void ToGraph::translateUnnest(const lp::UnnestNode& unnest) {
+  if (unnest.ordinalityName().has_value()) {
+    VELOX_NYI(
+        "Unnest ordinality column is not supported in Verax optimizer. Unnest node: {}",
+        unnest.id());
+  }
+  PlanObjectCP leftTable = nullptr;
+  ExprVector unnestExprs;
+  unnestExprs.reserve(unnest.unnestExpressions().size());
+  float maxCardinality = 0;
+  for (size_t i = 0; const auto& unnestedNames : unnest.unnestedNames()) {
+    const auto* unnestExpr = translateExpr(unnest.unnestExpressions()[i]);
+    unnestExprs.push_back(unnestExpr);
+    if (i++ == 0) {
+      leftTable = unnestExpr->singleTable();
+    } else if (leftTable && leftTable != unnestExpr->singleTable()) {
+      leftTable = nullptr;
+    }
+    maxCardinality = std::max(maxCardinality, unnestExpr->value().cardinality);
+  }
+
+  ColumnVector unnestedColumns;
+  for (size_t i = 0; const auto& unnestedNames : unnest.unnestedNames()) {
+    const auto* unnestExpr = unnestExprs[i++];
+    for (size_t j = 0; const auto& unnestedName : unnestedNames) {
+      const auto* unnestedType = unnestExpr->value().type->childAt(j++).get();
+      // TODO: Value cardinality also should be multiplied by the max from all
+      // columns average expected number of elements per unnested element.
+      // Other Value properties also should be computed.
+      Value value{unnestedType, maxCardinality};
+      const auto* columnName = toName(unnestedName);
+      auto* column = make<Column>(columnName, currentDt_, value, columnName);
+      unnestedColumns.push_back(column);
+      renames_[columnName] = column;
+    }
+  }
+  currentDt_->unnests.emplace_back(
+      make<UnnestPlan>(std::move(unnestExprs), std::move(unnestedColumns)));
+}
+
 AggregationPlanCP ToGraph::translateAggregation(
     const lp::AggregateNode& logicalAgg) {
   ExprVector groupingKeys = translateColumns(logicalAgg.groupingKeys());
@@ -1161,7 +1203,8 @@ PlanObjectP ToGraph::makeValuesTable(const lp::ValuesNode& values) {
 
     const auto& name = names[i];
     Value value{toType(type->childAt(i)), cardinality};
-    auto* column = make<Column>(toName(name), valuesTable, value, toName(name));
+    const auto* columnName = toName(name);
+    auto* column = make<Column>(columnName, valuesTable, value, columnName);
     valuesTable->columns.push_back(column);
 
     renames_[name] = column;
@@ -1339,11 +1382,9 @@ DerivedTableP ToGraph::translateSetJoin(
   ColumnVector columns;
   for (auto i = 0; i < type->size(); ++i) {
     exprs.push_back(left->columns[i]);
-    columns.push_back(make<Column>(
-        toName(type->nameOf(i)),
-        setDt,
-        exprs.back()->value(),
-        toName(type->nameOf(i))));
+    const auto* columnName = toName(type->nameOf(i));
+    columns.push_back(
+        make<Column>(columnName, setDt, exprs.back()->value(), columnName));
     renames_[type->nameOf(i)] = columns.back();
   }
 
@@ -1440,8 +1481,9 @@ DerivedTableP ToGraph::translateUnion(
           newDt->exprs.push_back(inner);
 
           // The top dt has the same columns as all the unioned dts.
+          const auto* columnName = toName(name);
           auto* outer =
-              make<Column>(toName(name), setDt, inner->value(), toName(name));
+              make<Column>(columnName, setDt, inner->value(), columnName);
           setDt->columns.push_back(outer);
           newDt->columns.push_back(outer);
         }
@@ -1608,7 +1650,25 @@ PlanObjectP ToGraph::makeQueryGraph(
       currentDt_->tableSet.add(setDt);
       return currentDt_;
     }
-    case lp::NodeKind::kUnnest:
+
+    case lp::NodeKind::kUnnest: {
+      if (!contains(allowedInDt, PlanType::kUnnestNode)) {
+        return wrapInDt(node);
+      }
+
+      // Multiple unnest is allowed in a DT.
+      // If arrives after groupBy, orderBy, limit, then starts a new DT.
+      makeQueryGraph(*node.onlyInput(), allowedInDt);
+
+      if (currentDt_->hasAggregation() || currentDt_->hasOrderBy() ||
+          currentDt_->hasLimit()) {
+        finalizeDt(*node.onlyInput());
+      }
+
+      translateUnnest(*node.asUnchecked<lp::UnnestNode>());
+      return currentDt_;
+    }
+
     default:
       VELOX_NYI(
           "Unsupported PlanNode {}", lp::NodeKindName::toName(node.kind()));
