@@ -114,7 +114,7 @@ void ToGraph::translateConjuncts(const lp::ExprPtr& input, ExprVector& flat) {
   if (!input) {
     return;
   }
-  if (isSpecialForm(input.get(), lp::SpecialForm::kAnd)) {
+  if (isSpecialForm(input, lp::SpecialForm::kAnd)) {
     for (auto& child : input->inputs()) {
       translateConjuncts(child, flat);
     }
@@ -151,7 +151,10 @@ ExprCP ToGraph::tryFoldConstant(
   return nullptr;
 }
 
-bool ToGraph::isSubfield(const lp::Expr* expr, Step& step, lp::ExprPtr& input) {
+bool ToGraph::isSubfield(
+    const lp::ExprPtr& expr,
+    Step& step,
+    lp::ExprPtr& input) {
   if (isSpecialForm(expr, lp::SpecialForm::kDereference)) {
     step.kind = StepKind::kField;
     auto maybeIndex =
@@ -265,7 +268,7 @@ std::optional<ExprCP> ToGraph::translateSubfield(const lp::ExprPtr& inputExpr) {
     lp::ExprPtr input;
     Step step;
     VELOX_CHECK_NOT_NULL(expr);
-    bool isStep = isSubfield(expr.get(), step, input);
+    bool isStep = isSubfield(expr, step, input);
     if (!isStep) {
       if (steps.empty()) {
         return std::nullopt;
@@ -1502,7 +1505,7 @@ DerivedTableP ToGraph::translateUnion(
 }
 
 DerivedTableP ToGraph::makeQueryGraph(const lp::LogicalPlanNode& logicalPlan) {
-  markAllSubfields(logicalPlan.outputType().get(), logicalPlan);
+  markAllSubfields(logicalPlan);
 
   currentDt_ = newDt();
   makeQueryGraph(logicalPlan, kAllAllowedInDt);

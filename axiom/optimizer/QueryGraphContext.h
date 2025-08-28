@@ -319,7 +319,7 @@ class QueryGraphContext {
   /// Returns the interned instance of 'path'. 'path' is either
   /// retained if it is not previously known or it is deleted. Must be
   /// allocated from the arena of 'this'.
-  PathCP toPath(PathCP);
+  PathCP toPath(PathCP path);
 
   PathCP pathById(uint32_t id) {
     VELOX_DCHECK_LT(id, pathById_.size());
