@@ -34,10 +34,10 @@ PathCP stepsToPath(const std::vector<Step>& steps) {
 
 struct MarkFieldsAccessedContextArray {
   std::array<const RowType*, 1> rowTypes;
-  std::array<const LogicalContextSource, 1> sources;
+  std::array<LogicalContextSource, 1> sources;
 
-  MarkFieldsAccessedContext toCtx() const {
-    return {{rowTypes}, {sources}};
+  MarkFieldsAccessedContext ctx() const {
+    return {rowTypes, sources};
   }
 };
 
@@ -45,8 +45,8 @@ struct MarkFieldsAccessedContextVector {
   std::vector<const RowType*> rowTypes;
   std::vector<LogicalContextSource> sources;
 
-  MarkFieldsAccessedContext toCtx() const {
-    return {{rowTypes}, {sources}};
+  MarkFieldsAccessedContext ctx() const {
+    return {rowTypes, sources};
   }
 };
 
@@ -60,6 +60,8 @@ MarkFieldsAccessedContextVector fromNodes(
     const std::vector<lp::LogicalPlanNodePtr>& nodes) {
   std::vector<const RowType*> rowTypes;
   std::vector<LogicalContextSource> sources;
+  rowTypes.reserve(nodes.size());
+  sources.reserve(nodes.size());
   for (const auto& node : nodes) {
     rowTypes.push_back(node->outputType().get());
     sources.push_back(LogicalContextSource{.planNode = node.get()});
@@ -76,7 +78,7 @@ void ToGraph::markFieldAccessed(
     bool isControl) {
   const auto& input = project.onlyInput();
   markSubfields(
-      project.expressionAt(ordinal), steps, isControl, fromNode(input).toCtx());
+      project.expressionAt(ordinal), steps, isControl, fromNode(input).ctx());
 }
 
 void ToGraph::markFieldAccessed(
@@ -85,10 +87,11 @@ void ToGraph::markFieldAccessed(
     std::vector<Step>& steps,
     bool isControl) {
   const auto& input = agg.onlyInput();
+  const auto ctx = fromNode(input);
 
   std::vector<Step> subSteps;
   auto mark = [&](const lp::ExprPtr& expr) {
-    markSubfields(expr, subSteps, isControl, fromNode(input).toCtx());
+    markSubfields(expr, subSteps, isControl, ctx.ctx());
   };
 
   const auto& keys = agg.groupingKeys();
@@ -117,9 +120,8 @@ void ToGraph::markFieldAccessed(
     std::vector<Step>& steps,
     bool isControl) {
   for (const auto& input : set.inputs()) {
-    auto context = fromNode(input);
-    markFieldAccessed(
-        context.sources[0], ordinal, steps, isControl, context.toCtx());
+    const auto ctx = fromNode(input);
+    markFieldAccessed(ctx.sources[0], ordinal, steps, isControl, ctx.ctx());
   }
 }
 
@@ -136,11 +138,9 @@ void ToGraph::markFieldAccessed(
     const auto* lambdaInfo = metadata->lambdaInfo(source.lambdaOrdinal);
     const auto nth = lambdaInfo->argOrdinal[ordinal];
 
-    markSubfields(
-        source.call->inputAt(nth),
-        steps,
-        isControl,
-        {context.rowTypes.subspan(1), context.sources.subspan(1)});
+    MarkFieldsAccessedContext callContext{
+        context.rowTypes.subspan(1), context.sources.subspan(1)};
+    markSubfields(source.call->inputAt(nth), steps, isControl, callContext);
     return;
   }
 
@@ -419,10 +419,11 @@ void ToGraph::markSubfields(
 void ToGraph::markColumnSubfields(
     const lp::LogicalPlanNodePtr& source,
     std::span<const lp::ExprPtr> columns) {
+  const auto ctx = fromNode(source);
+  std::vector<Step> steps;
   for (const auto& column : columns) {
-    std::vector<Step> steps;
-    markSubfields(
-        column, steps, /* isControl */ true, fromNode(source).toCtx());
+    markSubfields(column, steps, /* isControl */ true, ctx.ctx());
+    VELOX_DCHECK(steps.empty());
   }
 }
 
@@ -436,7 +437,7 @@ void ToGraph::markControl(const lp::LogicalPlanNode& node) {
           condition,
           empty,
           /* isControl */ true,
-          fromNodes(join->inputs()).toCtx());
+          fromNodes(join->inputs()).ctx());
     }
 
   } else if (kind == lp::NodeKind::kFilter) {
@@ -459,12 +460,12 @@ void ToGraph::markControl(const lp::LogicalPlanNode& node) {
     auto* set = node.asUnchecked<lp::SetNode>();
     if (set->operation() != lp::SetOperation::kUnionAll) {
       // If this is with a distinct every column is a control column.
-      for (auto i = 0; i < set->outputType()->size(); ++i) {
-        for (auto& in : set->inputs()) {
-          std::vector<Step> empty;
-          auto context = fromNode(in);
-          markFieldAccessed(
-              context.sources[0], i, empty, true, context.toCtx());
+      std::vector<Step> steps;
+      for (size_t i = 0; i < set->outputType()->size(); ++i) {
+        for (const auto& input : set->inputs()) {
+          const auto ctx = fromNode(input);
+          markFieldAccessed(ctx.sources[0], i, steps, true, ctx.ctx());
+          VELOX_DCHECK(steps.empty());
         }
       }
     }

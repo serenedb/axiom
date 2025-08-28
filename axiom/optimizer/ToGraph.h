@@ -61,8 +61,8 @@ struct LogicalContextSource {
 };
 
 struct MarkFieldsAccessedContext {
-  // 1:1 with 'sources'. Either output type of the plan node or signature of a
-  // lambda.
+  // 1:1 with 'sources'.
+  // Either output type of the plan node or signature of a lambda.
   std::span<const RowType* const> rowTypes;
   std::span<const LogicalContextSource> sources;
 };
