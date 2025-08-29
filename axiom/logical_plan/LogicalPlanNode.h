@@ -403,11 +403,16 @@ class JoinNode : public LogicalPlanNode {
       JoinType joinType,
       ExprPtr condition)
       : LogicalPlanNode{NodeKind::kJoin, std::move(id), {left, right}, makeOutputType(left, right)},
-        joinType_{joinType},
-        condition_{std::move(condition)} {
-    if (condition_ != nullptr) {
-      VELOX_USER_CHECK_EQ(condition_->typeKind(), TypeKind::BOOLEAN);
+        joinType_{joinType} {
+    setJoinCondition(std::move(condition));
+  }
+
+  void setJoinCondition(ExprPtr condition) {
+    VELOX_DCHECK_NULL(condition_);
+    if (condition != nullptr) {
+      VELOX_USER_CHECK_EQ(condition->typeKind(), TypeKind::BOOLEAN);
     }
+    condition_ = std::move(condition);
   }
 
   const LogicalPlanNodePtr& left() const {
@@ -435,7 +440,7 @@ class JoinNode : public LogicalPlanNode {
       const LogicalPlanNodePtr& right);
 
   const JoinType joinType_;
-  const ExprPtr condition_;
+  ExprPtr condition_;
 };
 
 using JoinNodePtr = std::shared_ptr<const JoinNode>;
