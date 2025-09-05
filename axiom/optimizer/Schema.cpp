@@ -20,6 +20,8 @@
 #include "axiom/optimizer/Optimization.h"
 #include "axiom/optimizer/PlanUtils.h"
 
+#include <numbers>
+
 namespace facebook::velox::optimizer {
 
 float Value::byteSize() const {
