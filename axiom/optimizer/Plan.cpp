@@ -392,8 +392,14 @@ bool JoinCandidate::isDominantEdge(PlanState& state, JoinEdgeP edge) {
 
 std::string JoinCandidate::toString() const {
   std::stringstream out;
-  out << join->toString() << " fanout " << fanout;
-  for (auto i = 1; i < tables.size(); ++i) {
+  if (join) {
+    out << join->toString();
+  } else {
+    out << "cross join ";
+    out << tables[0]->toString();
+  }
+  out << " fanout " << fanout;
+  for (size_t i = 1; i < tables.size(); ++i) {
     out << " + " << tables[i]->toString();
   }
   if (!existences.empty()) {
