@@ -16,9 +16,6 @@ cmake_minimum_required(VERSION 3.14)
 # Set the project name.
 project(axiom)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
-
 # Enable generation of compile_commands.json for clang tools
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -37,8 +34,7 @@ list(
   PREPEND
   CMAKE_MODULE_PATH
   "${PROJECT_SOURCE_DIR}/CMake"
-  "${PROJECT_SOURCE_DIR}/CMake/resolve_dependency_modules"
-  "${PROJECT_SOURCE_DIR}/velox/CMake")
+  "${PROJECT_SOURCE_DIR}/../velox/CMake")
 include(ResolveDependency)
 
 set(VELOX_BUILD_VECTOR_TEST_UTILS
@@ -104,7 +100,7 @@ endif()
 execute_process(
   COMMAND
     bash -c
-    "( source ${CMAKE_CURRENT_SOURCE_DIR}/velox/scripts/setup-helper-functions.sh && echo -n $(get_cxx_flags $ENV{CPU_TARGET}))"
+    "( source ${CMAKE_CURRENT_SOURCE_DIR}/../velox/scripts/setup-helper-functions.sh && echo -n $(get_cxx_flags $ENV{CPU_TARGET}))"
   OUTPUT_VARIABLE SCRIPT_CXX_FLAGS
   RESULT_VARIABLE COMMAND_STATUS)
 
@@ -155,17 +151,6 @@ velox_resolve_dependency(antlr4-runtime)
 
 message(STATUS "Using ANTLR4 runtime from ${ANTLR4_INCLUDE_DIR}")
 
-# Use xxhash and xsimd from Velox for now.
-include_directories(.)
-include_directories(${CMAKE_BINARY_DIR})
-include_directories(${CMAKE_BINARY_DIR}/velox)
-include_directories(SYSTEM velox)
-include_directories(SYSTEM velox/velox/external/xxhash axiom)
-include_directories(SYSTEM ${CMAKE_BINARY_DIR}/_deps/xsimd-src/include/)
-include_directories(${ANTLR4_INCLUDE_DIR})
-
-add_subdirectory(velox)
-add_subdirectory(axiom/sql/presto)
 add_subdirectory(axiom/logical_plan)
 add_subdirectory(axiom/runner)
 add_subdirectory(axiom/connectors)
