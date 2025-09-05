@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(tests)
-
 velox_add_library(axiom_runner_multifragment_plan MultiFragmentPlan.cpp)
 
 velox_link_libraries(axiom_runner_multifragment_plan velox_common_base
