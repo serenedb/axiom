@@ -108,7 +108,8 @@ add_executable(
   PrestoParserTest.cpp
   TestConnectorQueryTest.cpp
   SchemaUtilsTest.cpp
-  SchemaResolverTest.cpp)
+  SchemaResolverTest.cpp
+  WritePartitionTest.cpp)
 
 add_test(velox_plan_test velox_plan_test)
 

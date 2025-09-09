@@ -202,6 +202,11 @@ class ToGraph {
     }
   }
 
+  std::unordered_map<int32_t, connector::ConnectorInsertTableHandlePtr>&
+  writeHandles() {
+    return writeHandles_;
+  }
+
  private:
   static bool isSpecialForm(
       const logical_plan::ExprPtr& expr,
@@ -326,6 +331,8 @@ class ToGraph {
 
   PlanObjectP addOrderBy(const logical_plan::SortNode& order);
 
+  PlanObjectP addWrite(const logical_plan::TableWriteNode& TableWriteNode);
+
   bool isSubfield(
       const logical_plan::ExprPtr& expr,
       Step& step,
@@ -368,6 +375,12 @@ class ToGraph {
 
   void markFieldAccessed(
       const logical_plan::SetNode& set,
+      int32_t ordinal,
+      std::vector<Step>& steps,
+      bool isControl);
+
+  void markFieldAccessed(
+      const logical_plan::TableWriteNode& write,
       int32_t ordinal,
       std::vector<Step>& steps,
       bool isControl);
@@ -502,6 +515,8 @@ class ToGraph {
   Name cardinality_{nullptr};
 
   std::unordered_map<Name, Name> reversibleFunctions_;
+  std::unordered_map<int32_t, connector::ConnectorInsertTableHandlePtr>
+      writeHandles_;
 };
 
 } // namespace facebook::velox::optimizer
