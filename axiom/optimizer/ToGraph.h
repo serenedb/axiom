@@ -515,6 +515,7 @@ class ToGraph {
   Name cardinality_{nullptr};
 
   std::unordered_map<Name, Name> reversibleFunctions_;
+
   std::unordered_map<int32_t, connector::ConnectorInsertTableHandlePtr>
       writeHandles_;
 };

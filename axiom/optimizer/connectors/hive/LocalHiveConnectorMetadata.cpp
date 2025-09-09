@@ -828,6 +828,7 @@ void moveFilesRecursively(
   }
 }
 
+
 // Helper: Check if directory exists.
 bool dirExists(const std::string& path) {
   struct stat info;

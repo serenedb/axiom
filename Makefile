@@ -46,8 +46,8 @@ clean:            #: Delete all build artifacts
 	rm -rf $(BUILD_BASE_DIR)
 
 submodules:
-	git submodule sync --recursive
-	git submodule update --init --recursive
+#	git submodule sync --recursive
+#	git submodule update --init --recursive
 
 cmake: submodules	#: Use CMake to create a Makefile build system
 	mkdir -p $(BUILD_BASE_DIR)/$(BUILD_DIR) && \

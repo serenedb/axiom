@@ -184,8 +184,6 @@ struct SortOrder {
 /// types are compatible.
 class PartitionType {
  public:
-
-  virtual ~PartitionType() = default;
   virtual std::optional<int32_t> numPartitions() const {
     return std::nullopt;
   }

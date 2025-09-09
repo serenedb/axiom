@@ -664,7 +664,7 @@ RelationOpPtr repartitionForWrite(const RelationOpPtr& plan, PlanState& state) {
     auto name = toName(partition[i]->name());
     auto it = std::find(write->columns().begin(), write->columns().end(), name);
     VELOX_CHECK(
-        it != write->columns().end(), "No value for partition column {}", name);
+        it == write->columns().end(), "No value for partition column {}", name);
     keyValues.push_back(write->values()[i]);
   }
 

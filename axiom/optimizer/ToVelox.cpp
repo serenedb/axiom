@@ -1503,6 +1503,7 @@ core::PlanNodePtr ToVelox::makeWrite(
 
   auto& partitionColumns = layout->partitionColumns();
   if (!partitionColumns.empty()) {
+    auto* partitionType = layout->partitionType();
     std::vector<column_index_t> channels;
     std::vector<VectorPtr> constants;
     for (auto i = 0; i < partitionColumns.size(); ++i) {
