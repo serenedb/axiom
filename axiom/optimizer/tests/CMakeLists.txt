@@ -100,6 +100,7 @@ add_executable(
   HiveLimitQueriesTest.cpp
   HiveQueriesTest.cpp
   PlanTest.cpp
+  UnnestTest.cpp
   ParquetTpchTest.cpp
   SubfieldTest.cpp
   FeatureGen.cpp

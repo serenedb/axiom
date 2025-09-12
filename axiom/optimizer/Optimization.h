@@ -299,6 +299,12 @@ class Optimization {
       const JoinCandidate& candidate,
       PlanState& state);
 
+  void crossJoinUnnest(
+      RelationOpPtr plan,
+      const JoinCandidate& candidate,
+      PlanState& state,
+      std::vector<NextJoin>& toTry);
+
   const OptimizerOptions options_;
 
   const runner::MultiFragmentPlan::Options runnerOptions_;
