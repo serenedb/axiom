@@ -97,6 +97,7 @@ target_link_libraries(
 
 add_executable(
   axiom_optimizer_tests
+  HiveAggregationQueriesTest.cpp
   HiveLimitQueriesTest.cpp
   HiveQueriesTest.cpp
   PlanTest.cpp
