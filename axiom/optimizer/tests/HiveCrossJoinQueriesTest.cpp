@@ -106,11 +106,8 @@ TEST_F(HiveCrossJoinQueriesTest, filterPushdown) {
                   .tableScan(
                       connectorId, "region", getSchema("region")->names())
                   .as("r"))
-          .crossJoin(
-              lp::PlanBuilder(context)
-                  .tableScan(
-                      connectorId, "customer", getSchema("customer")->names())
-                  .as("c"))
+          .crossJoin(lp::PlanBuilder(context).tableScan(
+              connectorId, "customer", getSchema("customer")->names()))
           .filter("n.n_regionkey != r.r_regionkey")
           .build();
 
@@ -152,22 +149,13 @@ TEST_F(HiveCrossJoinQueriesTest, manyTables) {
   auto logicalPlan =
       lp::PlanBuilder(context)
           .tableScan(connectorId, "nation", getSchema("nation")->names())
-          .as("n")
-          .crossJoin(
-              lp::PlanBuilder(context)
-                  .tableScan(
-                      connectorId, "region", getSchema("region")->names())
-                  .as("r"))
-          .crossJoin(
-              lp::PlanBuilder(context)
-                  .tableScan(
-                      connectorId, "customer", getSchema("customer")->names())
-                  .as("c"))
-          .crossJoin(
-              lp::PlanBuilder(context)
-                  .tableScan(
-                      connectorId, "lineitem", getSchema("lineitem")->names())
-                  .as("l"))
+
+          .crossJoin(lp::PlanBuilder(context).tableScan(
+              connectorId, "region", getSchema("region")->names()))
+          .crossJoin(lp::PlanBuilder(context).tableScan(
+              connectorId, "customer", getSchema("customer")->names()))
+          .crossJoin(lp::PlanBuilder(context).tableScan(
+              connectorId, "lineitem", getSchema("lineitem")->names()))
           .build();
 
   {
@@ -216,13 +204,10 @@ TEST_F(HiveCrossJoinQueriesTest, innerJoin) {
                   .tableScan(
                       connectorId, "region", getSchema("region")->names())
                   .as("r"),
-              "n_regionkey = r_regionkey",
+              "n.n_regionkey = r.r_regionkey",
               lp::JoinType::kInner)
-          .crossJoin(
-              lp::PlanBuilder(context)
-                  .tableScan(
-                      connectorId, "customer", getSchema("customer")->names())
-                  .as("c"))
+          .crossJoin(lp::PlanBuilder(context).tableScan(
+              connectorId, "customer", getSchema("customer")->names()))
           .build();
 
   {
