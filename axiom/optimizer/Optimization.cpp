@@ -15,6 +15,7 @@
  */
 
 #include "axiom/optimizer/Optimization.h"
+#include <optimizer/Schema.h>
 #include <algorithm>
 #include <iostream>
 #include <utility>
@@ -1196,7 +1197,7 @@ void Optimization::crossJoin(
       broadcastTables,
       candidate.existences};
 
-  auto broadcast =
+  Distribution broadcast =
       Distribution::broadcast(plan->distribution().distributionType);
   PlanObjectSet empty;
   bool needsShuffle = false;
