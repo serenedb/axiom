@@ -110,11 +110,6 @@ std::optional<int64_t> maybeIntegerLiteral(
 
 std::string conjunctsToString(const ExprVector& conjuncts);
 
-RelationOpPtr addWindowOps(
-    RelationOpPtr input,
-    std::span<ExprCP> maybeWindowDependentExprs,
-    PlanState& state);
-
 std::string orderByToString(
     const ExprVector& orderKeys,
     const OrderTypeVector& orderTypes);

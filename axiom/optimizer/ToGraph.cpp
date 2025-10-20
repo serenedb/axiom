@@ -15,13 +15,18 @@
  */
 
 #include <fmt/core.h>
+#include <logical_plan/Expr.h>
 #include <optimizer/PlanObject.h>
+#include <optimizer/Schema.h>
+#include <optimizer/ToGraph.h>
 #include <velox/common/base/Exceptions.h>
 #include <algorithm>
 #include <iostream>
+#include <ranges>
 #include <utility>
 #include "axiom/logical_plan/ExprPrinter.h"
 #include "axiom/logical_plan/PlanPrinter.h"
+#include "axiom/logical_plan/Utils.h"
 #include "axiom/optimizer/FunctionRegistry.h"
 #include "axiom/optimizer/Optimization.h"
 #include "axiom/optimizer/Plan.h"
@@ -127,7 +132,7 @@ void ToGraph::addDtColumn(DerivedTableP dt, std::string_view name) {
     outer = make<Column>(columnName, dt, inner->value(), columnName);
   }
   dt->columns.push_back(outer);
-  renames_[name] = outer;
+  renames_[std::string{name}] = outer;
 }
 
 void ToGraph::setDtOutput(DerivedTableP dt, const lp::LogicalPlanNode& node) {
@@ -689,7 +694,14 @@ ExprCP ToGraph::translateExpr(const lp::ExprPtr& expr) {
   }
 
   if (expr->isWindow()) {
-    return translateWindow(expr->asUnchecked<lp::WindowExpr>());
+    const auto* window = expr->asUnchecked<lp::WindowExpr>();
+    auto it = logicalToGraphWindows_.find(window);
+    VELOX_CHECK(
+        it != logicalToGraphWindows_.end(),
+        fmt::format(
+            "Window function wasn't collected, but requested for translation: {}",
+            lp::ExprPrinter::toText(*expr)));
+    return it->second->column();
   }
 
   ToGraphContext ctx(expr.get());
@@ -869,7 +881,7 @@ std::optional<ExprCP> ToGraph::translateSubfieldFunction(
 }
 
 ExprCP ToGraph::translateColumn(std::string_view name) {
-  auto it = renames_.find(name);
+  auto it = renames_.find(std::string{name});
   if (it != renames_.end()) {
     return it->second;
   }
@@ -1118,7 +1130,7 @@ AggregationPlanCP ToGraph::translateAggregation(const lp::AggregateNode& agg) {
       std::move(intermediateColumns));
 }
 
-ExprCP ToGraph::translateWindow(const lp::WindowExpr* windowExpr) {
+WindowCP ToGraph::translateWindow(const lp::WindowExpr* windowExpr) {
   FunctionSet functions;
   ExprVector args;
   args.reserve(windowExpr->inputs().size());
@@ -1160,7 +1172,8 @@ ExprCP ToGraph::translateWindow(const lp::WindowExpr* windowExpr) {
 
   const auto* name = toName(windowExpr->name());
   auto value = Value(toType(windowExpr->type()), 1);
-  WindowSpec spec{std::move(partitionKeys), std::move(orderKeys), std::move(orderTypes)};
+  WindowSpec spec{
+      std::move(partitionKeys), std::move(orderKeys), std::move(orderTypes)};
 
   return make<Window>(
       name,
@@ -1169,6 +1182,7 @@ ExprCP ToGraph::translateWindow(const lp::WindowExpr* windowExpr) {
       functions,
       std::move(spec),
       frame,
+      currentDt_,
       windowExpr->ignoreNulls());
 }
 
@@ -1480,6 +1494,25 @@ void ToGraph::makeSubfieldColumns(
   allColumnSubfields_[column] = std::move(projections);
 }
 
+ToGraph::LogicalToGraphWindow ToGraph::collectWindows(const std::vector<lp::ExprPtr>& exprs) {
+  LogicalToGraphWindow logicalToGraphWindows;
+
+  lp::RecursiveExprVisitorContext ctx;
+  ctx.preExprVisitor = [&](const lp::Expr& expr) {
+    if (expr.isWindow()) {
+      const auto* name = toName(expr.type()->toString());
+      auto value = Value(toType(expr.type()), 1);
+
+      const auto* windowExpr = expr.asUnchecked<lp::WindowExpr>();
+
+      const auto* window = translateWindow(windowExpr);
+      logicalToGraphWindows[windowExpr] = window;
+    }
+  };
+  lp::visitExprsRecursively(exprs, ctx);
+  return logicalToGraphWindows;
+}
+
 PlanObjectP ToGraph::addProjection(const lp::ProjectNode* project) {
   exprSource_ = project->onlyInput().get();
   const auto& names = project->names();
@@ -1495,9 +1528,20 @@ PlanObjectP ToGraph::addProjection(const lp::ProjectNode* project) {
     }
   });
 
-  for (auto i : channels) {
+  auto logicalToGraphWindows = collectWindows(project->expressions());
+  if (!logicalToGraphWindows.empty()) {
+    VELOX_CHECK(currentDt_->windows.empty());
+    // currentDt_->exprs.reserve(logicalToGraphWindows.size());
+    for (const auto& [logicalWindow, graphWindow]: logicalToGraphWindows) {
+      currentDt_->windows.emplace_back(graphWindow);
+      // currentDt_->exprs.emplace_back(graphWindow->column());
+      // currentDt_->columns.emplace_back(graphWindow->column());
+    }
+
+    // finalizeDt(*project)/;
   }
 
+  logicalToGraphWindows_ = std::move(logicalToGraphWindows);
   for (auto i : channels) {
     if (exprs[i]->isInputReference()) {
       const auto& name =
@@ -1512,6 +1556,12 @@ PlanObjectP ToGraph::addProjection(const lp::ProjectNode* project) {
     auto expr = translateExpr(exprs.at(i));
     renames_[names[i]] = expr;
   }
+
+  if (!logicalToGraphWindows_.empty()) {
+    finalizeDt(*project);
+  }
+
+  logicalToGraphWindows_.clear();
 
   return currentDt_;
 }
@@ -1588,8 +1638,10 @@ PlanObjectP ToGraph::addWrite(const lp::TableWriteNode& tableWrite) {
     } else {
       const auto* tableColumn = connectorTable->findColumn(columnName);
       VELOX_DCHECK_NOT_NULL(tableColumn);
-      columnExprs.push_back(make<Literal>(
-          Value{toType(tableColumn->type()), 1}, &tableColumn->defaultValue()));
+      columnExprs.push_back(
+          make<Literal>(
+              Value{toType(tableColumn->type()), 1},
+              &tableColumn->defaultValue()));
     }
     VELOX_DCHECK(*tableSchema.childAt(i) == *columnExprs.back()->value().type);
   }

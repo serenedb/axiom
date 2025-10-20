@@ -944,6 +944,7 @@ class Window : public Call {
       FunctionSet functions,
       WindowSpec spec,
       WindowFrame frame,
+      PlanObjectCP dt,
       bool ignoreNulls)
       : Call(
             PlanType::kWindowExpr,
@@ -955,10 +956,9 @@ class Window : public Call {
         frame_(frame),
         column_([&]() {
           auto windowName = toName(fmt::format("{}_{}", name, id()));
-          return make<Column>(windowName, nullptr, value, windowName);
+          return make<Column>(windowName, dt, value, windowName);
         }()),
         ignoreNulls_(ignoreNulls) {
-    columns_.unionColumns(column_);
     columns_.unionColumns(spec_.partitionKeys);
     columns_.unionColumns(spec_.orderKeys);
 

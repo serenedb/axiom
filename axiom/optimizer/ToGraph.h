@@ -15,6 +15,9 @@
  */
 #pragma once
 
+#include <logical_plan/Expr.h>
+#include <optimizer/QueryGraphContext.h>
+#include <unordered_map>
 #include "axiom/optimizer/DerivedTable.h"
 #include "axiom/optimizer/OptimizerOptions.h"
 #include "axiom/optimizer/QueryGraph.h"
@@ -301,7 +304,10 @@ class ToGraph {
   AggregationPlanCP translateAggregation(
       const logical_plan::AggregateNode& aggregation);
 
-  ExprCP translateWindow(const logical_plan::WindowExpr* windowExpr);
+  WindowCP translateWindow(const logical_plan::WindowExpr* windowExpr);
+
+  using LogicalToGraphWindow = std::unordered_map<const logical_plan::WindowExpr*, WindowCP>;
+  LogicalToGraphWindow collectWindows(const std::vector<logical_plan::ExprPtr>& exprs);
 
   PlanObjectP addProjection(const logical_plan::ProjectNode* project);
 
@@ -456,7 +462,7 @@ class ToGraph {
   const logical_plan::LogicalPlanNode* exprSource_{nullptr};
 
   // Maps names in project nodes of input logical plan to deduplicated Exprs.
-  folly::F14FastMap<std::string, ExprCP> renames_;
+  std::unordered_map<std::string, ExprCP> renames_;
 
   folly::
       F14FastMap<TypedVariant, ExprCP, TypedVariantHasher, TypedVariantComparer>
@@ -501,6 +507,8 @@ class ToGraph {
   // Map from leaf PlanNode to corresponding PlanObject
   folly::F14FastMap<const logical_plan::LogicalPlanNode*, PlanObjectCP>
       planLeaves_;
+
+  LogicalToGraphWindow logicalToGraphWindows_;
 
   Name equality_;
   Name elementAt_{nullptr};

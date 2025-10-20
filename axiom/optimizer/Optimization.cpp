@@ -758,7 +758,10 @@ void Optimization::addPostprocess(
       }
     }
 
-    plan = addWindowOps(std::move(plan), usedExprs, state);
+    if (!dt->windows.empty()) {
+      addWindows(dt, plan, state);
+    }
+
     plan = make<Project>(
         maybeDropProject(plan),
         usedExprs,
@@ -849,6 +852,47 @@ void Optimization::addAggregation(
 
     state.addCost(*finalAgg);
     plan = finalAgg;
+  }
+}
+
+void Optimization::addWindows(
+    DerivedTableCP dt,
+    RelationOpPtr& plan,
+    PlanState& state) const {
+  std::unordered_map<
+      WindowSpec,
+      WindowVector,
+      WindowSpec::Hasher>
+      windowsBySpec;
+
+  for (const auto* window : dt->windows) {
+    windowsBySpec[window->spec()].push_back(window);
+  }
+
+  for (const auto& [spec, windows] : windowsBySpec) {
+    PrecomputeProjection precompute(plan, dt, /*projectAllInputs=*/false);
+
+    auto partitionKeys = precompute.toColumns(spec.partitionKeys);
+    auto orderKeys = precompute.toColumns(spec.orderKeys);
+
+    plan = std::move(precompute).maybeProject();
+
+    ColumnVector columns = plan->columns();
+    for (const auto* window : windows) {
+      columns.push_back(window->column());
+    }
+
+    auto* windowOp = make<WindowOp>(
+        plan,
+        std::move(partitionKeys),
+        std::move(orderKeys),
+        spec.orderTypes,
+        windows,
+        std::move(columns));
+
+    state.placed.unionObjects(windows);
+    state.addCost(*windowOp);
+    plan = windowOp;
   }
 }
 
@@ -1488,7 +1532,6 @@ bool Optimization::placeConjuncts(
       state.placed.add(filter);
     }
 
-    plan = addWindowOps(std::move(plan), filters, state);
     plan = make<Filter>(std::move(plan), std::move(filters));
     state.addCost(*plan);
 

@@ -31,14 +31,15 @@ using JoinEdgeVector = QGVector<JoinEdgeP>;
 class AggregationPlan;
 using AggregationPlanCP = const AggregationPlan*;
 
-class WindowPlan;
-using WindowPlanCP = const WindowPlan*;
-
 enum class OrderType;
 using OrderTypeVector = QGVector<OrderType>;
 
 class WritePlan;
 using WritePlanCP = const WritePlan*;
+
+class Window;
+using WindowCP = const Window*;
+using WindowVector = QGVector<WindowCP>;
 
 /// Represents a derived table, i.e. a SELECT in a FROM clause. This is the
 /// basic unit of planning. Derived tables can be merged and split apart from
@@ -144,6 +145,8 @@ struct DerivedTable : public PlanObject {
   AggregationPlanCP aggregation{nullptr};
 
   ExprVector having;
+
+  WindowVector windows;
 
   /// Order by.
   ExprVector orderKeys;

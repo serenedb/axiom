@@ -253,6 +253,13 @@ const PlanObjectSet& PlanState::downstreamColumns() const {
     addExprs(dt->write->columnExprs());
   }
 
+  // Windows.
+  for (const auto* window : dt->windows) {
+    if (!placed.contains(window)) {
+      addExpr(window);
+    }
+  }
+
   // Output expressions.
   targetExprs.forEach<Expr>([&](ExprCP expr) { addExpr(expr); });
 

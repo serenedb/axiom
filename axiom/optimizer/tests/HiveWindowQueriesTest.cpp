@@ -325,10 +325,9 @@ TEST_F(HiveWindowQueriesTest, orderBy) {
     auto matcher = core::PlanMatcherBuilder()
                        .tableScan("nation")
                        .window()
-                       .project()
-                       .orderBy()
                        .window()
                        .project()
+                       .orderBy()
                        .build();
     ASSERT_TRUE(matcher->match(plan));
   }
@@ -352,9 +351,8 @@ TEST_F(HiveWindowQueriesTest, orderByExprs) {
       lp::PlanBuilder(context)
           .tableScan("nation")
           .window(
-              {"rank() over (order by n_regionkey, n_nationkey desc, n_name) as rnk"})
-          .window(
-              {"row_number() over (partition by n_regionkey order by n_nationkey) as rn"})
+              {"rank() over (order by n_regionkey, n_nationkey desc, n_name) as rnk",
+                "row_number() over (partition by n_regionkey order by n_nationkey) as rn"})
           .orderBy({"rnk + rn"})
           .project({"rnk + rn"})
           .build();
@@ -365,6 +363,7 @@ TEST_F(HiveWindowQueriesTest, orderByExprs) {
                        .tableScan("nation")
                        .window()
                        .window()
+                       .project()
                        .project()
                        .orderBy()
                        .project()
@@ -551,8 +550,8 @@ TEST_F(HiveWindowQueriesTest, joinDependent) {
     auto plan = toSingleNodePlan(logicalPlan);
     auto matcher =
         core::PlanMatcherBuilder()
-            .tableScan("nation")
-            .hashJoin(core::PlanMatcherBuilder().tableScan("region").build())
+            .tableScan("region")
+            .hashJoin(core::PlanMatcherBuilder().tableScan("nation").build())
             .window()
             .window()
             .project()

@@ -984,9 +984,6 @@ void DerivedTable::makeInitialPlan() {
   PlanState state(*optimization, this);
   state.targetExprs.unionObjects(exprs);
 
-  std::cout << "DerivedTable structure:\n"
-            << DerivedTablePrinter::toText(*this) << "\n";
-
   optimization->makeJoins(state);
 
   auto plan = state.plans.best()->op;
