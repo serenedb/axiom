@@ -307,9 +307,11 @@ class ToGraph {
 
   WindowCP translateWindow(const logical_plan::WindowExpr* windowExpr);
 
-  using LogicalToGraphWindow =
-      std::unordered_map<const logical_plan::WindowExpr*, WindowCP>;
-  LogicalToGraphWindow collectOnlyLogicalWindows(
+  using WindowToColumn =
+      std::unordered_map<const logical_plan::WindowExpr*, ColumnCP>;
+  // collect and returns all the windows from exprs mapped to nullptr columns
+  // (they're supposed to be filled up by the caller)
+  WindowToColumn collectLogicalWindows(
       const std::vector<logical_plan::ExprPtr>& exprs);
 
   PlanObjectP addProjection(const logical_plan::ProjectNode* project);
@@ -511,7 +513,8 @@ class ToGraph {
   folly::F14FastMap<const logical_plan::LogicalPlanNode*, PlanObjectCP>
       planLeaves_;
 
-  std::unordered_map<const logical_plan::WindowExpr*, WindowCP> logicalToGraphWindows_;
+  // windows are supposed to be collected before traslation
+  WindowToColumn windowToColumn_;
 
   Name equality_;
   Name elementAt_{nullptr};

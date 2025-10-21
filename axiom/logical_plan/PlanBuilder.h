@@ -370,6 +370,11 @@ class PlanBuilder {
     return sort(sortingKeys);
   }
 
+  // a temporary hack method to make sort node with windows only, order types is
+  // set ascending. It exists because parser now can't parse window function
+  // and it's non trivial to make him do that.
+  PlanBuilder& orderByWindows(const std::vector<std::string>& sortingKeys);
+
   PlanBuilder& limit(int32_t count) {
     return limit(0, count);
   }
@@ -471,6 +476,8 @@ class PlanBuilder {
       std::vector<std::string>& outputNames,
       std::vector<ExprPtr>& exprs,
       NameMappings& mappings);
+
+  WindowOptions parseWindowOptions(const std::string& sql);
 
   const std::optional<std::string> defaultConnectorId_;
   const std::shared_ptr<velox::core::PlanNodeIdGenerator> planNodeIdGenerator_;

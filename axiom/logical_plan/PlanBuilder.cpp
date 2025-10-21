@@ -425,6 +425,84 @@ PlanBuilder& PlanBuilder::aggregate(
   return *this;
 }
 
+PlanBuilder::WindowOptions PlanBuilder::parseWindowOptions(const std::string& sql) {
+  auto windowExpr = velox::duckdb::parseWindowExpr(sql, {});
+
+  WindowExpr::Frame frame;
+  // Convert window type
+  switch (windowExpr.frame.type) {
+    case velox::duckdb::WindowType::kRows:
+      frame.type = WindowExpr::WindowType::kRows;
+      break;
+    case velox::duckdb::WindowType::kRange:
+      frame.type = WindowExpr::WindowType::kRange;
+      break;
+  }
+
+  switch (windowExpr.frame.startType) {
+    case velox::duckdb::BoundType::kUnboundedPreceding:
+      frame.startType = WindowExpr::BoundType::kUnboundedPreceding;
+      break;
+    case velox::duckdb::BoundType::kPreceding:
+      frame.startType = WindowExpr::BoundType::kPreceding;
+      break;
+    case velox::duckdb::BoundType::kCurrentRow:
+      frame.startType = WindowExpr::BoundType::kCurrentRow;
+      break;
+    case velox::duckdb::BoundType::kFollowing:
+      frame.startType = WindowExpr::BoundType::kFollowing;
+      break;
+    case velox::duckdb::BoundType::kUnboundedFollowing:
+      frame.startType = WindowExpr::BoundType::kUnboundedFollowing;
+      break;
+  }
+
+  switch (windowExpr.frame.endType) {
+    case velox::duckdb::BoundType::kUnboundedPreceding:
+      frame.endType = WindowExpr::BoundType::kUnboundedPreceding;
+      break;
+    case velox::duckdb::BoundType::kPreceding:
+      frame.endType = WindowExpr::BoundType::kPreceding;
+      break;
+    case velox::duckdb::BoundType::kCurrentRow:
+      frame.endType = WindowExpr::BoundType::kCurrentRow;
+      break;
+    case velox::duckdb::BoundType::kFollowing:
+      frame.endType = WindowExpr::BoundType::kFollowing;
+      break;
+    case velox::duckdb::BoundType::kUnboundedFollowing:
+      frame.endType = WindowExpr::BoundType::kUnboundedFollowing;
+      break;
+  }
+
+  if (windowExpr.frame.startValue != nullptr) {
+    frame.startValue = resolveScalarTypes(windowExpr.frame.startValue);
+  }
+  if (windowExpr.frame.endValue != nullptr) {
+    frame.endValue = resolveScalarTypes(windowExpr.frame.endValue);
+  }
+
+  std::vector<ExprPtr> partitionBy;
+  partitionBy.reserve(windowExpr.partitionBy.size());
+  for (const auto& partitionExpr : windowExpr.partitionBy) {
+    partitionBy.emplace_back(resolveScalarTypes(partitionExpr));
+  }
+
+  std::vector<SortingField> orderBy;
+  orderBy.reserve(windowExpr.orderBy.size());
+  for (const auto& orderByClause : windowExpr.orderBy) {
+    auto sortKeyExpr = resolveScalarTypes(orderByClause.expr);
+    SortOrder order{orderByClause.ascending, orderByClause.nullsFirst};
+    orderBy.emplace_back(sortKeyExpr, order);
+  }
+
+  return WindowOptions(
+      std::move(partitionBy),
+      std::move(orderBy),
+      std::move(frame),
+      windowExpr.ignoreNulls);
+}
+
 PlanBuilder& PlanBuilder::window(const std::vector<std::string>& windowExprs) {
   std::vector<ExprApi> parsedExprs;
   std::vector<WindowOptions> options;
@@ -432,82 +510,7 @@ PlanBuilder& PlanBuilder::window(const std::vector<std::string>& windowExprs) {
   options.reserve(windowExprs.size());
 
   for (const auto& sql : windowExprs) {
-    auto windowExpr = velox::duckdb::parseWindowExpr(sql, {});
-    parsedExprs.emplace_back(windowExpr.functionCall);
-
-    WindowExpr::Frame frame;
-    // Convert window type
-    switch (windowExpr.frame.type) {
-      case velox::duckdb::WindowType::kRows:
-        frame.type = WindowExpr::WindowType::kRows;
-        break;
-      case velox::duckdb::WindowType::kRange:
-        frame.type = WindowExpr::WindowType::kRange;
-        break;
-    }
-
-    switch (windowExpr.frame.startType) {
-      case velox::duckdb::BoundType::kUnboundedPreceding:
-        frame.startType = WindowExpr::BoundType::kUnboundedPreceding;
-        break;
-      case velox::duckdb::BoundType::kPreceding:
-        frame.startType = WindowExpr::BoundType::kPreceding;
-        break;
-      case velox::duckdb::BoundType::kCurrentRow:
-        frame.startType = WindowExpr::BoundType::kCurrentRow;
-        break;
-      case velox::duckdb::BoundType::kFollowing:
-        frame.startType = WindowExpr::BoundType::kFollowing;
-        break;
-      case velox::duckdb::BoundType::kUnboundedFollowing:
-        frame.startType = WindowExpr::BoundType::kUnboundedFollowing;
-        break;
-    }
-
-    switch (windowExpr.frame.endType) {
-      case velox::duckdb::BoundType::kUnboundedPreceding:
-        frame.endType = WindowExpr::BoundType::kUnboundedPreceding;
-        break;
-      case velox::duckdb::BoundType::kPreceding:
-        frame.endType = WindowExpr::BoundType::kPreceding;
-        break;
-      case velox::duckdb::BoundType::kCurrentRow:
-        frame.endType = WindowExpr::BoundType::kCurrentRow;
-        break;
-      case velox::duckdb::BoundType::kFollowing:
-        frame.endType = WindowExpr::BoundType::kFollowing;
-        break;
-      case velox::duckdb::BoundType::kUnboundedFollowing:
-        frame.endType = WindowExpr::BoundType::kUnboundedFollowing;
-        break;
-    }
-
-    if (windowExpr.frame.startValue != nullptr) {
-      frame.startValue = resolveScalarTypes(windowExpr.frame.startValue);
-    }
-    if (windowExpr.frame.endValue != nullptr) {
-      frame.endValue = resolveScalarTypes(windowExpr.frame.endValue);
-    }
-
-    std::vector<ExprPtr> partitionBy;
-    partitionBy.reserve(windowExpr.partitionBy.size());
-    for (const auto& partitionExpr : windowExpr.partitionBy) {
-      partitionBy.emplace_back(resolveScalarTypes(partitionExpr));
-    }
-
-    std::vector<SortingField> orderBy;
-    orderBy.reserve(windowExpr.orderBy.size());
-    for (const auto& orderByClause : windowExpr.orderBy) {
-      auto sortKeyExpr = resolveScalarTypes(orderByClause.expr);
-      SortOrder order{orderByClause.ascending, orderByClause.nullsFirst};
-      orderBy.emplace_back(sortKeyExpr, order);
-    }
-
-    options.emplace_back(
-        std::move(partitionBy),
-        std::move(orderBy),
-        std::move(frame),
-        windowExpr.ignoreNulls);
+    options.emplace_back(parseWindowOptions(sql));
   }
 
   return window(parsedExprs, options);
@@ -1420,6 +1423,37 @@ PlanBuilder& PlanBuilder::setOperation(
     nodes.push_back(builder.node_);
   }
   node_ = std::make_shared<SetNode>(nextId(), std::move(nodes), op);
+  return *this;
+}
+
+PlanBuilder& PlanBuilder::orderByWindows(
+    const std::vector<std::string>& sortingKeys) {
+  VELOX_USER_CHECK_NOT_NULL(node_, "Sort node cannot be a leaf node");
+
+  std::vector<SortingField> sortingFields;
+  sortingFields.reserve(sortingKeys.size());
+
+  for (const auto& key : sortingKeys) {
+    auto parsedWindowExpr = velox::duckdb::parseWindowExpr(key, {});
+    auto windowOptions = parseWindowOptions(key);
+    auto resolveResult = resolveWindowTypes(parsedWindowExpr.functionCall);
+
+    WindowExprPtr windowExpr = std::make_shared<WindowExpr>(
+        resolveResult.type,
+        resolveResult.functionName,
+        resolveResult.functionInputs,
+        windowOptions.partitionBy,
+        windowOptions.orderBy,
+        windowOptions.frame,
+        windowOptions.ignoreNulls);
+
+    sortingFields.push_back(
+        SortingField{windowExpr, SortOrder(true, false)});  // ascending, nulls last
+  }
+
+  node_ = std::make_shared<SortNode>(
+      nextId(), std::move(node_), std::move(sortingFields));
+
   return *this;
 }
 

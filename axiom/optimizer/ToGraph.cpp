@@ -697,13 +697,13 @@ ExprCP ToGraph::translateExpr(const lp::ExprPtr& expr) {
 
   if (expr->isWindow()) {
     const auto* window = expr->asUnchecked<lp::WindowExpr>();
-    auto it = logicalToGraphWindows_.find(window);
+    auto it = windowToColumn_.find(window);
     VELOX_CHECK(
-        it != logicalToGraphWindows_.end(),
+        it != windowToColumn_.end(),
         fmt::format(
             "Window function wasn't collected, but requested for translation: {}",
             lp::ExprPrinter::toText(*expr)));
-    return it->second->column();
+    return it->second;
   }
 
   ToGraphContext ctx(expr.get());
@@ -1496,19 +1496,19 @@ void ToGraph::makeSubfieldColumns(
   allColumnSubfields_[column] = std::move(projections);
 }
 
-ToGraph::LogicalToGraphWindow ToGraph::collectOnlyLogicalWindows(
+ToGraph::WindowToColumn ToGraph::collectLogicalWindows(
     const std::vector<lp::ExprPtr>& exprs) {
-  LogicalToGraphWindow logicalToGraphWindows;
+  WindowToColumn windowToColumn;
 
   lp::RecursiveExprVisitorContext ctx;
   ctx.preExprVisitor = [&](const lp::Expr& expr) {
     if (expr.isWindow()) {
       const auto* windowExpr = expr.asUnchecked<lp::WindowExpr>();
-      logicalToGraphWindows[windowExpr] = nullptr;
+      windowToColumn[windowExpr] = nullptr;
     }
   };
   lp::visitExprsRecursively(exprs, ctx);
-  return logicalToGraphWindows;
+  return windowToColumn;
 }
 
 PlanObjectP ToGraph::addProjection(const lp::ProjectNode* project) {
@@ -1886,34 +1886,35 @@ PlanObjectP ToGraph::makeQueryGraph(
     }
 
     case lp::NodeKind::kProject: {
-      auto project = node.asUnchecked<lp::ProjectNode>();
-      auto logicalWindows =
-          collectOnlyLogicalWindows(project->expressions());
-      bool hasWindows = !logicalWindows.empty();
+      const auto* project = node.asUnchecked<lp::ProjectNode>();
+      auto windows = collectLogicalWindows(project->expressions());
+      bool hasWindows = !windows.empty();
 
       auto previousDt = currentDt_;
       currentDt_ = hasWindows ? newDt() : previousDt;
       makeQueryGraph(*node.onlyInput(), allowedInDt);
-      
+
       if (hasWindows) {
         VELOX_CHECK(currentDt_->windows.empty());
-        for (auto& [logicalWindow, graphWindow] : logicalWindows) {
-          graphWindow = translateWindow(logicalWindow);
+        for (auto& [logicalWindow, column] : windows) {
+          const auto* graphWindow = translateWindow(logicalWindow);
+          column = graphWindow->column();
+          currentDt_->windows.emplace_back(graphWindow);
         }
-        auto windowsView = std::ranges::views::values(logicalWindows);
-        currentDt_->windows =
-            WindowVector(windowsView.begin(), windowsView.end());
-        logicalToGraphWindows_ = std::move(logicalWindows);
+
+        windowToColumn_ = std::move(windows);
       }
 
-      addProjection(node.asUnchecked<lp::ProjectNode>());
+      addProjection(project);
 
       if (hasWindows) {
-        logicalToGraphWindows_.clear();
-        const auto& names = project->names();
-        const auto& exprs = project->expressions();
+        windowToColumn_.clear();
         DerivedTableCP dt = currentDt_;
         finalizeDt(*project, previousDt);
+
+        // outer DT uses window need to point to the projected columns
+        const auto& names = project->names();
+        const auto& exprs = project->expressions();
         for (size_t i = 0; i < exprs.size(); ++i) {
           if (exprs[i]->isWindow()) {
             auto it =
@@ -1925,6 +1926,7 @@ PlanObjectP ToGraph::makeQueryGraph(
           }
         }
       }
+
       return currentDt_;
     }
 
