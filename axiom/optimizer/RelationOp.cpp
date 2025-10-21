@@ -375,6 +375,14 @@ Join::Join(
       filter{std::move(filterExprs)} {
   cost_.inputCardinality = inputCardinality();
   cost_.fanout = fanout;
+  const auto numRightColumns = static_cast<float>(right->columns().size());
+  if (method == JoinMethod::kCross) {
+    const float rightCardinality = right->resultCardinality();
+    const float rightByteSize = byteSize(right->columns());
+    cost_.unitCost = fanout *
+        (Costs::kColumnRowCost + numRightColumns * Costs::kColumnByteCost);
+    return;
+  }
 
   if (method == JoinMethod::kCross) {
     cost_.setupCost = fanout * byteSize(right->columns());
@@ -382,8 +390,6 @@ Join::Join(
   }
 
   const float buildSize = right->resultCardinality();
-  const auto numRightColumns =
-      static_cast<float>(right->input()->columns().size());
   auto rowCost = numRightColumns * Costs::kHashExtractColumnCost;
   const auto numLeftKeys = static_cast<float>(leftKeys.size());
   cost_.unitCost = Costs::hashProbeCost(buildSize) + cost_.fanout * rowCost +

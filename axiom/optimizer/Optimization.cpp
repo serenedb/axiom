@@ -1313,7 +1313,10 @@ void Optimization::joinByHashRight(
 RelationOpPtr Optimization::crossJoin(
     RelationOpPtr plan,
     const JoinCandidate& candidate,
-    PlanState& state) {
+    PlanState& state,
+    std::vector<NextJoin>& toTry) {
+  PlanStateSaver save(state);
+
   PlanObjectSet broadcastTables;
   PlanObjectSet broadcastColumns;
   for (const auto* buildTable : candidate.tables) {
@@ -1329,6 +1332,7 @@ RelationOpPtr Optimization::crossJoin(
       broadcastTables,
       candidate.existences};
 
+<<<<<<< HEAD
   auto broadcast = Distribution::broadcast();
   PlanObjectSet empty;
   bool needsShuffle = false;
@@ -1339,6 +1343,18 @@ RelationOpPtr Optimization::crossJoin(
   RelationOpPtr rightOp = rightPlan->op;
   if (needsShuffle) {
     rightOp = make<Repartition>(rightPlan->op, broadcast, rightOp->columns());
+=======
+  Distribution broadcast = Distribution::broadcast();
+  bool needsShuffle = false;
+  auto* rightPlan = makePlan(
+      memoKey, broadcast, {}, candidate.existsFanout, state, needsShuffle);
+
+  RelationOpPtr rightOp = rightPlan->op;
+  PlanState rightPlanState(state.optimization, state.dt, rightPlan);
+  if (needsShuffle) {
+    rightOp = make<Repartition>(rightPlan->op, broadcast, rightOp->columns());
+    rightPlanState.addCost(*rightOp);
+>>>>>>> 986f218 (feat: Add cross join support with tests and fixes)
   }
 
   auto resultColumns = plan->columns();
@@ -1347,12 +1363,27 @@ RelationOpPtr Optimization::crossJoin(
       rightOp->columns().begin(),
       rightOp->columns().end());
 
+<<<<<<< HEAD
   plan = Join::makeCrossJoin(
       std::move(plan), std::move(rightOp), std::move(resultColumns));
 
   state.cost = plan->cost();
   state.placed.unionSet(broadcastTables);
   return plan;
+=======
+  auto* join = Join::makeCrossJoin(
+      std::move(plan), std::move(rightOp), std::move(resultColumns));
+
+  state.addCost(*join);
+
+  state.cost.setupCost +=
+      rightPlanState.cost.unitCost + rightPlanState.cost.setupCost;
+  state.cost.totalBytes += rightPlanState.cost.totalBytes;
+  state.cost.transferBytes += rightPlanState.cost.transferBytes;
+
+  state.placed.unionSet(broadcastTables);
+  state.addNextJoin(&candidate, join, {}, toTry);
+>>>>>>> 986f218 (feat: Add cross join support with tests and fixes)
 }
 
 void Optimization::crossJoinUnnest(
