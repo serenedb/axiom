@@ -17,12 +17,14 @@
 #include <fmt/core.h>
 #include <logical_plan/Expr.h>
 #include <optimizer/PlanObject.h>
+#include <optimizer/QueryGraphContext.h>
 #include <optimizer/Schema.h>
 #include <optimizer/ToGraph.h>
 #include <velox/common/base/Exceptions.h>
 #include <algorithm>
 #include <iostream>
 #include <ranges>
+#include <unordered_map>
 #include <utility>
 #include "axiom/logical_plan/ExprPrinter.h"
 #include "axiom/logical_plan/PlanPrinter.h"
@@ -1494,19 +1496,15 @@ void ToGraph::makeSubfieldColumns(
   allColumnSubfields_[column] = std::move(projections);
 }
 
-ToGraph::LogicalToGraphWindow ToGraph::collectWindows(const std::vector<lp::ExprPtr>& exprs) {
+ToGraph::LogicalToGraphWindow ToGraph::collectOnlyLogicalWindows(
+    const std::vector<lp::ExprPtr>& exprs) {
   LogicalToGraphWindow logicalToGraphWindows;
 
   lp::RecursiveExprVisitorContext ctx;
   ctx.preExprVisitor = [&](const lp::Expr& expr) {
     if (expr.isWindow()) {
-      const auto* name = toName(expr.type()->toString());
-      auto value = Value(toType(expr.type()), 1);
-
       const auto* windowExpr = expr.asUnchecked<lp::WindowExpr>();
-
-      const auto* window = translateWindow(windowExpr);
-      logicalToGraphWindows[windowExpr] = window;
+      logicalToGraphWindows[windowExpr] = nullptr;
     }
   };
   lp::visitExprsRecursively(exprs, ctx);
@@ -1528,20 +1526,6 @@ PlanObjectP ToGraph::addProjection(const lp::ProjectNode* project) {
     }
   });
 
-  auto logicalToGraphWindows = collectWindows(project->expressions());
-  if (!logicalToGraphWindows.empty()) {
-    VELOX_CHECK(currentDt_->windows.empty());
-    // currentDt_->exprs.reserve(logicalToGraphWindows.size());
-    for (const auto& [logicalWindow, graphWindow]: logicalToGraphWindows) {
-      currentDt_->windows.emplace_back(graphWindow);
-      // currentDt_->exprs.emplace_back(graphWindow->column());
-      // currentDt_->columns.emplace_back(graphWindow->column());
-    }
-
-    // finalizeDt(*project)/;
-  }
-
-  logicalToGraphWindows_ = std::move(logicalToGraphWindows);
   for (auto i : channels) {
     if (exprs[i]->isInputReference()) {
       const auto& name =
@@ -1556,12 +1540,6 @@ PlanObjectP ToGraph::addProjection(const lp::ProjectNode* project) {
     auto expr = translateExpr(exprs.at(i));
     renames_[names[i]] = expr;
   }
-
-  if (!logicalToGraphWindows_.empty()) {
-    finalizeDt(*project);
-  }
-
-  logicalToGraphWindows_.clear();
 
   return currentDt_;
 }
@@ -1907,10 +1885,48 @@ PlanObjectP ToGraph::makeQueryGraph(
       return addFilter(filter);
     }
 
-    case lp::NodeKind::kProject:
-      // A project is always allowed in a DT. Multiple projects are combined.
+    case lp::NodeKind::kProject: {
+      auto project = node.asUnchecked<lp::ProjectNode>();
+      auto logicalWindows =
+          collectOnlyLogicalWindows(project->expressions());
+      bool hasWindows = !logicalWindows.empty();
+
+      auto previousDt = currentDt_;
+      currentDt_ = hasWindows ? newDt() : previousDt;
       makeQueryGraph(*node.onlyInput(), allowedInDt);
-      return addProjection(node.asUnchecked<lp::ProjectNode>());
+      
+      if (hasWindows) {
+        VELOX_CHECK(currentDt_->windows.empty());
+        for (auto& [logicalWindow, graphWindow] : logicalWindows) {
+          graphWindow = translateWindow(logicalWindow);
+        }
+        auto windowsView = std::ranges::views::values(logicalWindows);
+        currentDt_->windows =
+            WindowVector(windowsView.begin(), windowsView.end());
+        logicalToGraphWindows_ = std::move(logicalWindows);
+      }
+
+      addProjection(node.asUnchecked<lp::ProjectNode>());
+
+      if (hasWindows) {
+        logicalToGraphWindows_.clear();
+        const auto& names = project->names();
+        const auto& exprs = project->expressions();
+        DerivedTableCP dt = currentDt_;
+        finalizeDt(*project, previousDt);
+        for (size_t i = 0; i < exprs.size(); ++i) {
+          if (exprs[i]->isWindow()) {
+            auto it =
+                std::ranges::find_if(dt->columns, [&](const ColumnCP& column) {
+                  return column->name() == names[i];
+                });
+            VELOX_CHECK(it != dt->columns.end());
+            renames_[names[i]] = *it;
+          }
+        }
+      }
+      return currentDt_;
+    }
 
     case lp::NodeKind::kAggregate:
       if (!contains(allowedInDt, PlanType::kAggregationNode)) {

@@ -753,8 +753,14 @@ void Optimization::addPostprocess(
     for (auto i = 0; i < dt->exprs.size(); ++i) {
       const auto* expr = dt->exprs[i];
       if (state.targetExprs.contains(expr)) {
-        usedColumns.emplace_back(dt->columns[i]);
+        const auto* column = dt->columns[i];
+        usedColumns.emplace_back(column);
+        state.columns.add(column);
+
         usedExprs.emplace_back(state.toColumn(expr));
+        if (expr->isColumn()) {
+          state.columns.add(expr);
+        }
       }
     }
 

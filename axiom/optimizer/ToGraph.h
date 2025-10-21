@@ -18,6 +18,7 @@
 #include <logical_plan/Expr.h>
 #include <optimizer/QueryGraphContext.h>
 #include <unordered_map>
+#include <vector>
 #include "axiom/optimizer/DerivedTable.h"
 #include "axiom/optimizer/OptimizerOptions.h"
 #include "axiom/optimizer/QueryGraph.h"
@@ -306,8 +307,10 @@ class ToGraph {
 
   WindowCP translateWindow(const logical_plan::WindowExpr* windowExpr);
 
-  using LogicalToGraphWindow = std::unordered_map<const logical_plan::WindowExpr*, WindowCP>;
-  LogicalToGraphWindow collectWindows(const std::vector<logical_plan::ExprPtr>& exprs);
+  using LogicalToGraphWindow =
+      std::unordered_map<const logical_plan::WindowExpr*, WindowCP>;
+  LogicalToGraphWindow collectOnlyLogicalWindows(
+      const std::vector<logical_plan::ExprPtr>& exprs);
 
   PlanObjectP addProjection(const logical_plan::ProjectNode* project);
 
@@ -508,7 +511,7 @@ class ToGraph {
   folly::F14FastMap<const logical_plan::LogicalPlanNode*, PlanObjectCP>
       planLeaves_;
 
-  LogicalToGraphWindow logicalToGraphWindows_;
+  std::unordered_map<const logical_plan::WindowExpr*, WindowCP> logicalToGraphWindows_;
 
   Name equality_;
   Name elementAt_{nullptr};

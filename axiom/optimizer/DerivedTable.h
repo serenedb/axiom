@@ -224,6 +224,10 @@ struct DerivedTable : public PlanObject {
     return limit >= 0;
   }
 
+  bool hasWindows() const {
+    return !windows.empty();
+  }
+
   /// Fills in 'startTables_' to 'tables_' that are not to the right of
   /// non-commutative joins.
   void setStartTables();

@@ -435,12 +435,11 @@ TEST_F(HiveWindowQueriesTest, filters) {
 
   {
     auto plan = toSingleNodePlan(logicalPlan);
-    std::cerr << plan->toString(true, true) << std::endl;
     auto matcher = core::PlanMatcherBuilder()
                        .tableScan("nation")
                        .window()
-                       .filter()
                        .project()
+                       .filter()
                        .build();
     ASSERT_TRUE(matcher->match(plan));
   }
@@ -488,7 +487,6 @@ TEST_F(HiveWindowQueriesTest, joinOn) {
                                      .project()
                                      .build())
                        .filter()
-                       .project()
                        .build();
     ASSERT_TRUE(matcher->match(plan));
   }
@@ -570,7 +568,13 @@ TEST_F(HiveWindowQueriesTest, joinDependent) {
                   .tableScan("region", getSchema("region"))
                   .planNode(),
               "",
-              {})
+              {"n_nationkey",
+               "n_name",
+               "n_regionkey",
+               "n_comment",
+               "r_regionkey",
+               "r_name",
+               "r_comment"})
           .window(
               {"row_number() over (partition by r_regionkey order by n_nationkey) as rn1"})
           .window(
