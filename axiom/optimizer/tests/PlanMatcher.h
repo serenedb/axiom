@@ -147,7 +147,7 @@ class PlanMatcherBuilder {
   PlanMatcherBuilder& orderBy(const std::vector<std::string>& ordering);
 
   PlanMatcherBuilder& tableWrite();
-  
+
   PlanMatcherBuilder& window();
 
   std::shared_ptr<PlanMatcher> build() {
