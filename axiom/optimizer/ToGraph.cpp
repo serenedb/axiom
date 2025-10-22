@@ -15,13 +15,18 @@
  */
 
 #include <velox/common/base/Exceptions.h>
+#include <algorithm>
+#include <cstdint>
 #include <iostream>
+#include <utility>
 #include "axiom/logical_plan/ExprPrinter.h"
 #include "axiom/logical_plan/PlanPrinter.h"
+#include "axiom/logical_plan/Utils.h"
 #include "axiom/optimizer/FunctionRegistry.h"
 #include "axiom/optimizer/Optimization.h"
 #include "axiom/optimizer/Plan.h"
 #include "axiom/optimizer/PlanUtils.h"
+#include "axiom/optimizer/QueryGraph.h"
 #include "velox/exec/Aggregate.h"
 #include "velox/exec/AggregateFunctionRegistry.h"
 #include "velox/expression/ConstantExpr.h"
@@ -691,6 +696,10 @@ ExprCP ToGraph::translateExpr(const lp::ExprPtr& expr) {
     return translateLambda(expr->as<lp::LambdaExpr>());
   }
 
+  if (expr->isWindow()) {
+    return translateWindow(expr->as<lp::WindowExpr>());
+  }
+
   ToGraphContext ctx(expr.get());
   velox::ExceptionContextSetter exceptionContext(makeExceptionContext(&ctx));
 
@@ -723,7 +732,7 @@ ExprCP ToGraph::translateExpr(const lp::ExprPtr& expr) {
       args.emplace_back(arg);
       allConstant &= arg->is(PlanType::kLiteralExpr);
       cardinality = std::max(cardinality, arg->value().cardinality);
-      if (arg->is(PlanType::kCallExpr)) {
+      if (arg->is(PlanType::kCallExpr) || arg->is(PlanType::kWindowExpr)) {
         funcs = funcs | arg->as<Call>()->functions();
       }
     }
@@ -767,23 +776,43 @@ ExprCP ToGraph::translateLambda(const lp::LambdaExpr* lambda) {
 
 namespace {
 
-constexpr uint64_t kAllAllowedInDt = ~uint64_t{0};
-
 // Returns a mask that allows 'op' in the same derived table.
-uint64_t allow(lp::NodeKind op) {
+constexpr uint64_t allow(lp::NodeKind op) {
   return uint64_t{1} << static_cast<uint64_t>(op);
 }
 
 // True if 'op' is in 'mask.
-bool contains(uint64_t mask, lp::NodeKind op) {
+constexpr bool contains(uint64_t mask, lp::NodeKind op) {
   return mask & allow(op);
 }
 
 // Removes 'op' from the set of operators allowed in the current derived
 // table. makeQueryGraph() starts a new derived table if it finds an operator
 // that does not belong to the mask.
-uint64_t makeDtIf(uint64_t mask, lp::NodeKind op) {
+constexpr uint64_t makeDtIf(uint64_t mask, lp::NodeKind op) {
   return mask & ~allow(op);
+}
+
+// Imply presense of window functions, now windows are used only
+// in orderby / projections. We start new derived table when we see window
+// function
+constexpr lp::NodeKind kWindowExprs{63};
+constexpr uint64_t kAllAllowedInDt = makeDtIf(~uint64_t{0}, kWindowExprs);
+
+template <typename Exprs>
+bool hasWindow(const Exprs& exprs) {
+  bool hasWindow = false;
+  lp::RecursiveExprVisitorContext ctx;
+  ctx.preExprVisitor = [&](const lp::Expr& expr) {
+    if (!expr.isWindow()) {
+      return true;
+    }
+    hasWindow = true;
+    return false;
+  };
+
+  lp::visitExprsRecursively(exprs, ctx);
+  return hasWindow;
 }
 
 } // namespace
@@ -1145,6 +1174,56 @@ AggregationPlanCP ToGraph::translateAggregation(const lp::AggregateNode& agg) {
       std::move(deduppedAggregates),
       std::move(columns),
       std::move(intermediateColumns));
+}
+
+WindowCP ToGraph::translateWindow(const lp::WindowExpr* windowExpr) {
+  ExprVector args;
+  args.reserve(windowExpr->inputs().size());
+  for (const auto& input : windowExpr->inputs()) {
+    args.emplace_back(translateExpr(input));
+  }
+
+  ExprVector partitionKeys;
+  partitionKeys.reserve(windowExpr->partitionKeys().size());
+  folly::F14FastSet<ExprCP> uniquePartitionKeys;
+  for (const auto& partitionKey : windowExpr->partitionKeys()) {
+    const auto* key = translateExpr(partitionKey);
+    if (!uniquePartitionKeys.emplace(key).second) {
+      continue;
+    }
+    partitionKeys.emplace_back(key);
+  }
+
+  ExprVector orderKeys;
+  OrderTypeVector orderTypes;
+  std::tie(orderKeys, orderTypes) =
+      dedupOrdering(windowExpr->ordering(), uniquePartitionKeys);
+
+  const auto& lpFrame = windowExpr->frame();
+  WindowFrame frame;
+  frame.type = lpFrame.type;
+  frame.startType = lpFrame.startType;
+  if (lpFrame.startValue) {
+    frame.startValue = translateExpr(lpFrame.startValue);
+  }
+  frame.endType = lpFrame.endType;
+  if (lpFrame.endValue) {
+    frame.endValue = translateExpr(lpFrame.endValue);
+  }
+
+  const auto* name = toName(windowExpr->name());
+  Value value{toType(windowExpr->type()), 1};
+  WindowSpec spec{
+      std::move(partitionKeys), std::move(orderKeys), std::move(orderTypes)};
+
+  return make<Window>(
+      name,
+      value,
+      std::move(args),
+      std::move(spec),
+      frame,
+      currentDt_,
+      windowExpr->ignoreNulls());
 }
 
 void ToGraph::addOrderBy(const lp::SortNode& order) {
@@ -1752,6 +1831,7 @@ DerivedTableP ToGraph::wrapInDt(
   }();
   VELOX_DCHECK_NULL(queryDt);
   return outerDt;
+  return outerDt;
 }
 
 DerivedTableP ToGraph::makeQueryGraph(
@@ -1788,8 +1868,18 @@ DerivedTableP ToGraph::makeQueryGraph(
       return outerDt;
     }
     case lp::NodeKind::kProject: {
-      auto* outerDt = makeQueryGraph(*node.onlyInput(), allowedInDt);
-      addProjection(*node.as<lp::ProjectNode>());
+      const auto& input = *node.onlyInput();
+      const auto& project = *node.as<lp::ProjectNode>();
+      if (!contains(allowedInDt, kWindowExprs) &&
+          hasWindow(project.expressions())) {
+        allowedInDt = allow(lp::NodeKind::kSort) | allow(kWindowExprs);
+        auto* outerDt = makeQueryGraph(input, allowedInDt);
+        addProjection(project);
+        finalizeDt(node, outerDt);
+        return nullptr;
+      }
+      auto* outerDt = makeQueryGraph(input, allowedInDt);
+      addProjection(project);
       return outerDt;
     }
     case lp::NodeKind::kAggregate: {
@@ -1826,8 +1916,16 @@ DerivedTableP ToGraph::makeQueryGraph(
       return nullptr;
     }
     case lp::NodeKind::kSort: {
-      auto* outerDt = makeStream(*node.onlyInput(), allowedInDt);
-      addOrderBy(*node.as<lp::SortNode>());
+      const auto& input = *node.onlyInput();
+      const auto& order = *node.as<lp::SortNode>();
+      if (!contains(allowedInDt, kWindowExprs) && hasWindow(order.ordering())) {
+        auto* outerDt = wrapInDt(input, MakeType::kStream);
+        addOrderBy(order);
+        finalizeDt(node, outerDt);
+        return nullptr;
+      }
+      auto* outerDt = makeStream(input, makeDtIf(allowedInDt, kWindowExprs));
+      addOrderBy(order);
       return outerDt;
     }
     case lp::NodeKind::kLimit: {
@@ -1869,13 +1967,14 @@ DerivedTableP ToGraph::makeQueryGraph(
 }
 
 std::pair<ExprVector, OrderTypeVector> ToGraph::dedupOrdering(
-    const std::vector<lp::SortingField>& ordering) {
+    const std::vector<lp::SortingField>& ordering,
+    folly::F14FastSet<ExprCP> keysToIgnore) {
   ExprVector deduppedOrderKeys;
   OrderTypeVector deduppedOrderTypes;
   deduppedOrderKeys.reserve(ordering.size());
   deduppedOrderTypes.reserve(ordering.size());
 
-  folly::F14FastSet<ExprCP> uniqueOrderKeys;
+  folly::F14FastSet<ExprCP> uniqueOrderKeys = std::move(keysToIgnore);
   for (const auto& field : ordering) {
     const auto* key = translateExpr(field.expression);
     if (!uniqueOrderKeys.emplace(key).second) {

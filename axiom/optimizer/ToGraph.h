@@ -293,6 +293,8 @@ class ToGraph {
 
   ExprCP translateLambda(const logical_plan::LambdaExpr* lambda);
 
+  WindowCP translateWindow(const logical_plan::WindowExpr* windowExpr);
+
   // If 'expr' is not a subfield path, returns std::nullopt. If 'expr'
   // is a subfield path that is subsumed by a projected subfield,
   // returns nullptr. Else returns an optional subfield path on top of
@@ -461,7 +463,8 @@ class ToGraph {
   // occurrences of the same expression are redundant since the column is
   // already sorted by the first occurrence.
   std::pair<ExprVector, OrderTypeVector> dedupOrdering(
-      const std::vector<logical_plan::SortingField>& ordering);
+      const std::vector<logical_plan::SortingField>& ordering,
+      folly::F14FastSet<ExprCP> keysToIgnore = {});
 
   // Cache of resolved table schemas.
   Schema schema_;
