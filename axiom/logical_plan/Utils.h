@@ -33,4 +33,8 @@ void visitExprsRecursively(
     std::span<const ExprPtr> exprs,
     RecursiveExprVisitorContext& ctx);
 
+void visitExprsRecursively(
+    std::span<const SortingField> exprs,
+    RecursiveExprVisitorContext& ctx);
+
 } // namespace facebook::axiom::logical_plan

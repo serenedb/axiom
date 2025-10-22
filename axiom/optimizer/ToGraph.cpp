@@ -16,6 +16,7 @@
 
 #include <fmt/core.h>
 #include <logical_plan/Expr.h>
+#include <logical_plan/LogicalPlanNode.h>
 #include <optimizer/PlanObject.h>
 #include <optimizer/QueryGraphContext.h>
 #include <optimizer/Schema.h>
@@ -696,14 +697,7 @@ ExprCP ToGraph::translateExpr(const lp::ExprPtr& expr) {
   }
 
   if (expr->isWindow()) {
-    const auto* window = expr->asUnchecked<lp::WindowExpr>();
-    auto it = windowToColumn_.find(window);
-    VELOX_CHECK(
-        it != windowToColumn_.end(),
-        fmt::format(
-            "Window function wasn't collected, but requested for translation: {}",
-            lp::ExprPrinter::toText(*expr)));
-    return it->second;
+    return translateWindow(expr->asUnchecked<lp::WindowExpr>());
   }
 
   ToGraphContext ctx(expr.get());
@@ -1496,21 +1490,6 @@ void ToGraph::makeSubfieldColumns(
   allColumnSubfields_[column] = std::move(projections);
 }
 
-ToGraph::WindowToColumn ToGraph::collectLogicalWindows(
-    const std::vector<lp::ExprPtr>& exprs) {
-  WindowToColumn windowToColumn;
-
-  lp::RecursiveExprVisitorContext ctx;
-  ctx.preExprVisitor = [&](const lp::Expr& expr) {
-    if (expr.isWindow()) {
-      const auto* windowExpr = expr.asUnchecked<lp::WindowExpr>();
-      windowToColumn[windowExpr] = nullptr;
-    }
-  };
-  lp::visitExprsRecursively(exprs, ctx);
-  return windowToColumn;
-}
-
 PlanObjectP ToGraph::addProjection(const lp::ProjectNode* project) {
   exprSource_ = project->onlyInput().get();
   const auto& names = project->names();
@@ -1840,6 +1819,20 @@ namespace {
 uint64_t makeDtIf(uint64_t mask, PlanType op) {
   return mask & ~(1UL << static_cast<uint32_t>(op));
 }
+
+template <typename Exprs>
+bool hasWindowFuncs(const Exprs& exprs) {
+  bool hasWindowFuncs = false;
+  lp::RecursiveExprVisitorContext ctx;
+  ctx.preExprVisitor = [&](const lp::Expr& expr) {
+    if (expr.isWindow()) {
+      hasWindowFuncs = true;
+    }
+  };
+  lp::visitExprsRecursively(exprs, ctx);
+  return hasWindowFuncs;
+}
+
 } // namespace
 
 PlanObjectP ToGraph::makeQueryGraph(
@@ -1887,44 +1880,17 @@ PlanObjectP ToGraph::makeQueryGraph(
 
     case lp::NodeKind::kProject: {
       const auto* project = node.asUnchecked<lp::ProjectNode>();
-      auto windows = collectLogicalWindows(project->expressions());
-      bool hasWindows = !windows.empty();
+      bool hasWindows = hasWindowFuncs(project->expressions());
 
       auto previousDt = currentDt_;
       currentDt_ = hasWindows ? newDt() : previousDt;
       makeQueryGraph(*node.onlyInput(), allowedInDt);
 
-      if (hasWindows) {
-        VELOX_CHECK(currentDt_->windows.empty());
-        for (auto& [logicalWindow, column] : windows) {
-          const auto* graphWindow = translateWindow(logicalWindow);
-          column = graphWindow->column();
-          currentDt_->windows.emplace_back(graphWindow);
-        }
-
-        windowToColumn_ = std::move(windows);
-      }
-
       addProjection(project);
 
       if (hasWindows) {
-        windowToColumn_.clear();
         DerivedTableCP dt = currentDt_;
         finalizeDt(*project, previousDt);
-
-        // outer DT uses window need to point to the projected columns
-        const auto& names = project->names();
-        const auto& exprs = project->expressions();
-        for (size_t i = 0; i < exprs.size(); ++i) {
-          if (exprs[i]->isWindow()) {
-            auto it =
-                std::ranges::find_if(dt->columns, [&](const ColumnCP& column) {
-                  return column->name() == names[i];
-                });
-            VELOX_CHECK(it != dt->columns.end());
-            renames_[names[i]] = *it;
-          }
-        }
       }
 
       return currentDt_;

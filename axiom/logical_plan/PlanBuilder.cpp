@@ -510,6 +510,9 @@ PlanBuilder& PlanBuilder::window(const std::vector<std::string>& windowExprs) {
   options.reserve(windowExprs.size());
 
   for (const auto& sql : windowExprs) {
+    auto parsed = velox::duckdb::parseWindowExpr(sql, {});
+
+    parsedExprs.emplace_back(parsed.functionCall);
     options.emplace_back(parseWindowOptions(sql));
   }
 

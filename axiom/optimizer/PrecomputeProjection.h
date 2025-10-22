@@ -102,8 +102,9 @@ class PrecomputeProjection {
   /// @returns the original 'input' with an optional ProjectOp on top.
   RelationOpPtr maybeProject() && {
     if (needsProject_) {
+      auto maybeWindows = addWindowOps(std::move(input_), projectExprs_);
       return make<Project>(
-          std::move(input_),
+          std::move(maybeWindows),
           std::move(projectExprs_),
           std::move(projectColumns_),
           /*redundant=*/false);

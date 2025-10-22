@@ -114,4 +114,8 @@ std::string orderByToString(
     const ExprVector& orderKeys,
     const OrderTypeVector& orderTypes);
 
+RelationOpPtr addWindowOps(
+    RelationOpPtr input,
+    std::span<ExprCP> maybeWindowDependentExprs);
+
 } // namespace facebook::axiom::optimizer

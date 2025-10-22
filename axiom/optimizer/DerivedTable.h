@@ -18,6 +18,7 @@
 #include "axiom/logical_plan/LogicalPlanNode.h"
 #include "axiom/optimizer/PlanObject.h"
 #include <folly/container/F14Map.h>
+#include <optimizer/QueryGraphContext.h>
 
 namespace facebook::axiom::optimizer {
 
@@ -146,7 +147,7 @@ struct DerivedTable : public PlanObject {
 
   ExprVector having;
 
-  WindowVector windows;
+  folly::F14FastMap<ColumnCP, WindowCP> columnToWindow;
 
   /// Order by.
   ExprVector orderKeys;
@@ -224,9 +225,7 @@ struct DerivedTable : public PlanObject {
     return limit >= 0;
   }
 
-  bool hasWindows() const {
-    return !windows.empty();
-  }
+  bool hasWindows() const;
 
   /// Fills in 'startTables_' to 'tables_' that are not to the right of
   /// non-commutative joins.

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "axiom/optimizer/DerivedTable.h"
+#include <algorithm>
 #include <iostream>
 #include "axiom/optimizer/DerivedTablePrinter.h"
 #include "axiom/optimizer/Optimization.h"
@@ -291,6 +292,14 @@ std::pair<DerivedTableP, JoinEdgeP> makeExistsDtAndJoin(
   return std::make_pair(existsDt, joinWithDt);
 }
 } // namespace
+
+bool DerivedTable::hasWindows() const {
+  bool windowInOrderBy = std::ranges::any_of(
+      orderKeys, [](ExprCP expr) { return expr->containsWindow(); });
+  bool windowInProjection = std::ranges::any_of(
+      exprs, [](ExprCP expr) { return expr->containsWindow(); });
+  return windowInOrderBy || windowInProjection;
+}
 
 void DerivedTable::import(
     const DerivedTable& super,

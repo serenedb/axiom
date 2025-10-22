@@ -29,6 +29,12 @@ public:
       visit(expr, ctx);
     }
   }
+
+  void visit(std::span<const SortingField> sortingFields, ExprVisitorContext& ctx) const {
+    for (const auto& sortField : sortingFields) {
+      visit(sortField.expression, ctx);
+    }
+  }
 private:
 
   void visit(const InputReferenceExpr& expr, ExprVisitorContext& context)
@@ -79,12 +85,6 @@ private:
     VELOX_FAIL("SubqueryExpr is not supported for the recursive visitor");
   }
 
-  void visit(std::span<const SortingField> sortingFields, ExprVisitorContext& ctx) const {
-    for (const auto& sortField : sortingFields) {
-      visit(sortField.expression, ctx);
-    }
-  }
-
   void visitInputs(const Expr& expr, ExprVisitorContext& ctx) const {
     for (const auto& input : expr.inputs()) {
       visit(input, ctx);
@@ -119,6 +119,12 @@ void visitExprsRecursively(
     std::span<const ExprPtr> exprs,
     RecursiveExprVisitorContext& ctx) {
   RecursiveExprVisitor().visit(exprs, ctx);
+}
+
+void visitExprsRecursively(
+    std::span<const SortingField> exprs,
+    RecursiveExprVisitorContext& ctx) {
+    RecursiveExprVisitor().visit(exprs, ctx);
 }
 
 } // namespace facebook::axiom::logical_plan

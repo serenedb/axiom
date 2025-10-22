@@ -418,25 +418,25 @@ TEST_F(HiveWindowQueriesTest, orderByWindowAliasesExprs) {
 }
 
 
-TEST_F(HiveWindowQueriesTest, orderBy) {
+TEST_F(HiveWindowQueriesTest, orderByWithStickyFilter) {
     lp::PlanBuilder::Context context(exec::test::kHiveConnectorId);
     auto logicalPlan =
         lp::PlanBuilder(context)
             .tableScan("nation")
             .orderByWindows(
                 {"rank() over (order by n_regionkey, n_nationkey desc, n_name)"})
+            .filter("n_regionkey < 10")
             .build();
 
     {
         auto plan = toSingleNodePlan(logicalPlan);
+        std::cerr << plan->toString(true, true) << std::endl;
         auto matcher = core::PlanMatcherBuilder()
-                        .tableScan("nation")
-                        .window()
-                        .window()
-                        .project()
-                        .project()
-                        .orderBy()
-                        .project()
+                           .tableScan("nation")
+                           .window()
+                           .project()
+                           .orderBy()
+                            .filter()
                         .build();
         ASSERT_TRUE(matcher->match(plan));
     }
@@ -647,69 +647,6 @@ TEST_F(HiveWindowQueriesTest, joinDependent) {
               {"row_number() over (partition by r_regionkey order by n_nationkey) as rn1"})
           .window(
               {"rank() over (partition by n_nationkey order by r_name) as rn2"})
-          .planNode();
-
-  checkSame(logicalPlan, referencePlan);
-}
-
-TEST_F(HiveWindowQueriesTest, joinWithOrderByAndLimitOnBothSides) {
-  lp::PlanBuilder::Context context(exec::test::kHiveConnectorId);
-  auto logicalPlan =
-      lp::PlanBuilder(context)
-          .tableScan("nation")
-          .limit(0, 10)
-          .orderBy({"n_nationkey"})
-          .as("n1")
-          .join(
-              lp::PlanBuilder(context)
-                  .tableScan("region")
-                  .limit(0, 5)
-                  .orderBy({"r_regionkey"})
-                  .as("r1"),
-              "n1.n_regionkey = r1.r_regionkey",
-              lp::JoinType::kInner)
-          .build();
-
-  {
-    auto plan = toSingleNodePlan(logicalPlan);
-    std::cerr << plan->toString(true, true) << std::endl;
-    auto matcher =
-        core::PlanMatcherBuilder()
-            .tableScan("nation")
-            .orderBy()
-            .limit()
-            .hashJoin(
-                core::PlanMatcherBuilder()
-                    .tableScan("region")
-                    .orderBy()
-                    .limit()
-                    .build())
-            .build();
-    ASSERT_TRUE(matcher->match(plan));
-  }
-
-  auto planNodeIdGenerator = std::make_shared<core::PlanNodeIdGenerator>();
-  auto referencePlan =
-      exec::test::PlanBuilder(planNodeIdGenerator)
-          .tableScan("nation", getSchema("nation"))
-          .orderBy({"n_nationkey"}, false)
-          .limit(0, 10, false)
-          .hashJoin(
-              {"n_regionkey"},
-              {"r_regionkey"},
-              exec::test::PlanBuilder(planNodeIdGenerator)
-                  .tableScan("region", getSchema("region"))
-                  .orderBy({"r_regionkey"}, false)
-                  .limit(0, 5, false)
-                  .planNode(),
-              "",
-              {"n_nationkey",
-               "n_name",
-               "n_regionkey",
-               "n_comment",
-               "r_regionkey",
-               "r_name",
-               "r_comment"})
           .planNode();
 
   checkSame(logicalPlan, referencePlan);

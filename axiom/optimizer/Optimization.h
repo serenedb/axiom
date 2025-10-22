@@ -229,9 +229,6 @@ class Optimization {
   void addAggregation(DerivedTableCP dt, RelationOpPtr& plan, PlanState& state)
       const;
 
-  void addWindows(DerivedTableCP dt, RelationOpPtr& plan, PlanState& state)
-      const;
-
   void addOrderBy(DerivedTableCP dt, RelationOpPtr& plan, PlanState& state)
       const;
 
