@@ -135,7 +135,6 @@ void ToGraph::markFieldAccessed(
   }
 }
 
-
 void ToGraph::markFieldAccessed(
     const LogicalContextSource& source,
     int32_t ordinal,
@@ -196,7 +195,6 @@ void ToGraph::markFieldAccessed(
     markFieldAccessed(*set, ordinal, steps, isControl);
     return;
   }
-
 
   const auto& sourceInputs = source.planNode->inputs();
   if (sourceInputs.empty()) {

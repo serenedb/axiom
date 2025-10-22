@@ -1595,10 +1595,8 @@ PlanObjectP ToGraph::addWrite(const lp::TableWriteNode& tableWrite) {
     } else {
       const auto* tableColumn = connectorTable->findColumn(columnName);
       VELOX_DCHECK_NOT_NULL(tableColumn);
-      columnExprs.push_back(
-          make<Literal>(
-              Value{toType(tableColumn->type()), 1},
-              &tableColumn->defaultValue()));
+      columnExprs.push_back(make<Literal>(
+          Value{toType(tableColumn->type()), 1}, &tableColumn->defaultValue()));
     }
     VELOX_DCHECK(*tableSchema.childAt(i) == *columnExprs.back()->value().type);
   }

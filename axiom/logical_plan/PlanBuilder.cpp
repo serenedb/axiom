@@ -425,7 +425,8 @@ PlanBuilder& PlanBuilder::aggregate(
   return *this;
 }
 
-PlanBuilder::WindowOptions PlanBuilder::parseWindowOptions(const std::string& sql) {
+PlanBuilder::WindowOptions PlanBuilder::parseWindowOptions(
+    const std::string& sql) {
   auto windowExpr = velox::duckdb::parseWindowExpr(sql, {});
 
   WindowExpr::Frame frame;
@@ -565,7 +566,8 @@ PlanBuilder& PlanBuilder::window(
 
   for (size_t i = 0; i < inputType->size(); ++i) {
     allNames.push_back(inputType->nameOf(i));
-    allExprs.push_back(std::make_shared<InputReferenceExpr>(inputType->childAt(i), inputType->nameOf(i)));
+    allExprs.push_back(std::make_shared<InputReferenceExpr>(
+        inputType->childAt(i), inputType->nameOf(i)));
   }
 
   for (size_t i = 0; i < exprs.size(); ++i) {
@@ -1450,8 +1452,8 @@ PlanBuilder& PlanBuilder::orderByWindows(
         windowOptions.frame,
         windowOptions.ignoreNulls);
 
-    sortingFields.push_back(
-        SortingField{windowExpr, SortOrder(true, false)});  // ascending, nulls last
+    sortingFields.push_back(SortingField{
+        windowExpr, SortOrder(true, false)}); // ascending, nulls last
   }
 
   node_ = std::make_shared<SortNode>(

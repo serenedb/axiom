@@ -269,10 +269,9 @@ velox::RowTypePtr ToVelox::makeOutputType(const ColumnVector& columns) const {
 
       auto runnerTable = schemaTable->connectorTable;
       if (runnerTable) {
-        auto* runnerColumn = runnerTable->findColumn(
-            std::string(
-                column->topColumn() ? column->topColumn()->name()
-                                    : column->name()));
+        auto* runnerColumn = runnerTable->findColumn(std::string(
+            column->topColumn() ? column->topColumn()->name()
+                                : column->name()));
         VELOX_CHECK_NOT_NULL(runnerColumn);
       }
     }
@@ -1512,10 +1511,9 @@ velox::core::PlanNodePtr ToVelox::makeValues(
 
     newValues.reserve(rows->size());
     for (const auto& row : *rows) {
-      newValues.emplace_back(
-          std::dynamic_pointer_cast<velox::RowVector>(
-              velox::BaseVector::wrappedVectorShared(
-                  variantToVector(type, row, pool))));
+      newValues.emplace_back(std::dynamic_pointer_cast<velox::RowVector>(
+          velox::BaseVector::wrappedVectorShared(
+              variantToVector(type, row, pool))));
     }
 
   } else {

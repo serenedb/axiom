@@ -800,17 +800,16 @@ void Optimization::addAggregation(
     auto args = precompute.toColumns(
         agg->args(), /*aliases=*/nullptr, /*preserveLiterals=*/true);
     auto orderKeys = precompute.toColumns(agg->orderKeys());
-    aggregates.emplace_back(
-        make<Aggregate>(
-            agg->name(),
-            agg->value(),
-            std::move(args),
-            agg->functions(),
-            agg->isDistinct(),
-            condition,
-            agg->intermediateType(),
-            std::move(orderKeys),
-            agg->orderTypes()));
+    aggregates.emplace_back(make<Aggregate>(
+        agg->name(),
+        agg->value(),
+        std::move(args),
+        agg->functions(),
+        agg->isDistinct(),
+        condition,
+        agg->intermediateType(),
+        std::move(orderKeys),
+        agg->orderTypes()));
   }
 
   plan = std::move(precompute).maybeProject();

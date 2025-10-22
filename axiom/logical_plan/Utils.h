@@ -19,7 +19,6 @@
 #include "axiom/logical_plan/Expr.h"
 #include "axiom/logical_plan/ExprVisitor.h"
 
-
 namespace facebook::axiom::logical_plan {
 
 class RecursiveExprVisitorContext : public ExprVisitorContext {
@@ -28,7 +27,8 @@ class RecursiveExprVisitorContext : public ExprVisitorContext {
   std::function<void(const Expr&)> postExprVisitor;
 };
 
-/// Utility function to visit expressions recursively with pre and post visitor callbacks.
+/// Utility function to visit expressions recursively with pre and post visitor
+/// callbacks.
 void visitExprsRecursively(
     std::span<const ExprPtr> exprs,
     RecursiveExprVisitorContext& ctx);

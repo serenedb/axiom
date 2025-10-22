@@ -15,10 +15,10 @@
  */
 #pragma once
 
-#include "axiom/logical_plan/LogicalPlanNode.h"
-#include "axiom/optimizer/PlanObject.h"
 #include <folly/container/F14Map.h>
 #include <optimizer/QueryGraphContext.h>
+#include "axiom/logical_plan/LogicalPlanNode.h"
+#include "axiom/optimizer/PlanObject.h"
 
 namespace facebook::axiom::optimizer {
 

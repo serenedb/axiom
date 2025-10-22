@@ -116,7 +116,7 @@ TEST_F(HiveWindowQueriesTest, stickyFilterAboveWindow) {
           .tableScan("nation", getSchema("nation"))
           .window(
               {"row_number() over (partition by n_regionkey order by n_nationkey) as rn"})
-        .filter("n_regionkey < 10")
+          .filter("n_regionkey < 10")
           .planNode();
 
   checkSame(logicalPlan, referencePlan);
@@ -417,41 +417,40 @@ TEST_F(HiveWindowQueriesTest, orderByWindowAliasesExprs) {
   checkSame(logicalPlan, referencePlan);
 }
 
-
 TEST_F(HiveWindowQueriesTest, orderByWithStickyFilter) {
-    lp::PlanBuilder::Context context(exec::test::kHiveConnectorId);
-    auto logicalPlan =
-        lp::PlanBuilder(context)
-            .tableScan("nation")
-            .orderByWindows(
-                {"rank() over (order by n_regionkey, n_nationkey desc, n_name)"})
-            .filter("n_regionkey < 10")
-            .build();
+  lp::PlanBuilder::Context context(exec::test::kHiveConnectorId);
+  auto logicalPlan =
+      lp::PlanBuilder(context)
+          .tableScan("nation")
+          .orderByWindows(
+              {"rank() over (order by n_regionkey, n_nationkey desc, n_name)"})
+          .filter("n_regionkey < 10")
+          .build();
 
-    {
-        auto plan = toSingleNodePlan(logicalPlan);
+  {
+    auto plan = toSingleNodePlan(logicalPlan);
 
-        auto matcher = core::PlanMatcherBuilder()
-                           .tableScan("nation")
-                           .window()
-                           .project()
-                           .orderBy()
+    auto matcher = core::PlanMatcherBuilder()
+                       .tableScan("nation")
+                       .window()
                        .project()
-                            .filter()
-                        .build();
-        ASSERT_TRUE(matcher->match(plan));
-    }
+                       .orderBy()
+                       .project()
+                       .filter()
+                       .build();
+    ASSERT_TRUE(matcher->match(plan));
+  }
 
-    auto referencePlan =
-        exec::test::PlanBuilder()
-            .tableScan("nation", getSchema("nation"))
-            .window(
-                {"rank() over (order by n_regionkey, n_nationkey desc, n_name) as rnk"})
-            .orderBy({"rnk"}, false)
-            .project(getSchema("nation")->names())
-            .planNode();
+  auto referencePlan =
+      exec::test::PlanBuilder()
+          .tableScan("nation", getSchema("nation"))
+          .window(
+              {"rank() over (order by n_regionkey, n_nationkey desc, n_name) as rnk"})
+          .orderBy({"rnk"}, false)
+          .project(getSchema("nation")->names())
+          .planNode();
 
-    checkSame(logicalPlan, referencePlan);
+  checkSame(logicalPlan, referencePlan);
 }
 
 TEST_F(HiveWindowQueriesTest, aggregate) {

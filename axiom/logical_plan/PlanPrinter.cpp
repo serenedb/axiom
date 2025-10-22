@@ -229,7 +229,6 @@ class ToTextVisitor : public PlanNodeVisitor {
     appendNode(name, node, std::nullopt, context);
   }
 
-
   void appendOutputType(const LogicalPlanNode& node, Context& context) const {
     context.out << " -> " << node.outputType()->toString();
   }
@@ -375,7 +374,6 @@ class CollectExprStatsPlanNodeVisitor : public PlanNodeVisitor {
     collectExprStats(node.columnExpressions(), stats);
     visitInputs(node, context);
   }
-
 
  private:
   static void collectExprStats(const Expr& expr, ExprStats& stats);
@@ -664,7 +662,6 @@ class SummarizeToTextVisitor : public PlanNodeVisitor {
 
     appendInputs(node, myContext);
   }
-
 
  private:
   static std::string makeIndent(size_t size) {

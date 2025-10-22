@@ -197,15 +197,17 @@
 
 //       const auto* aliasName = toName("aaa");
 //       auto* outputColumn =
-//           make<Column>(aliasName, dt, Value(toType(INTEGER()), 1), aliasName);
+//           make<Column>(aliasName, dt, Value(toType(INTEGER()), 1),
+//           aliasName);
 
-//       auto* column = precompute.toColumn(agg->groupingKeys()[0], outputColumn);
-//       ASSERT_NE(column, agg->groupingKeys()[0]);
+//       auto* column = precompute.toColumn(agg->groupingKeys()[0],
+//       outputColumn); ASSERT_NE(column, agg->groupingKeys()[0]);
 
 //       auto project = std::move(precompute).maybeProject();
 //       ASSERT_NE(project.get(), input.get());
 //       ASSERT_EQ(project->columns().size(), 1);
-//       ASSERT_EQ(project->as<Project>()->columns().back()->alias(), aliasName);
+//       ASSERT_EQ(project->as<Project>()->columns().back()->alias(),
+//       aliasName);
 //     }
 
 //     // Output name as alias column.
@@ -215,8 +217,8 @@
 //       auto* outputColumn =
 //           make<Column>(toName("aaa"), dt, Value(toType(INTEGER()), 1));
 
-//       auto* column = precompute.toColumn(agg->groupingKeys()[0], outputColumn);
-//       ASSERT_NE(column, agg->groupingKeys()[0]);
+//       auto* column = precompute.toColumn(agg->groupingKeys()[0],
+//       outputColumn); ASSERT_NE(column, agg->groupingKeys()[0]);
 
 //       auto project = std::move(precompute).maybeProject();
 //       ASSERT_NE(project.get(), input.get());

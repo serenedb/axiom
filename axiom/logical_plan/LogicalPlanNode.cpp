@@ -407,5 +407,4 @@ folly::F14FastMap<WriteKind, std::string_view> writeKindNames() {
 
 VELOX_DEFINE_ENUM_NAME(WriteKind, writeKindNames);
 
-
 } // namespace facebook::axiom::logical_plan

@@ -406,7 +406,11 @@ PlanObjectCP Expr::singleTable() const {
 
 PlanObjectSet Expr::allTables() const {
   PlanObjectSet set;
-  columns_.forEach<Column>([&](auto column) { if (column->relation()) { set.add(column->relation()); } });
+  columns_.forEach<Column>([&](auto column) {
+    if (column->relation()) {
+      set.add(column->relation());
+    }
+  });
   return set;
 }
 

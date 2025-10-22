@@ -23,20 +23,22 @@ namespace {
 
 /// Recursive visitor that automatically visits all children of expressions.
 class RecursiveExprVisitor : public ExprVisitor {
-public:
+ public:
   void visit(std::span<const ExprPtr> exprs, ExprVisitorContext& ctx) const {
     for (const auto& expr : exprs) {
       visit(expr, ctx);
     }
   }
 
-  void visit(std::span<const SortingField> sortingFields, ExprVisitorContext& ctx) const {
+  void visit(
+      std::span<const SortingField> sortingFields,
+      ExprVisitorContext& ctx) const {
     for (const auto& sortField : sortingFields) {
       visit(sortField.expression, ctx);
     }
   }
-private:
 
+ private:
   void visit(const InputReferenceExpr& expr, ExprVisitorContext& context)
       const override {
     // Leaf node - no children to visit
@@ -47,8 +49,7 @@ private:
     // Leaf node - no children to visit
   }
 
-  void visit(const CallExpr& expr, ExprVisitorContext& context)
-      const override {
+  void visit(const CallExpr& expr, ExprVisitorContext& context) const override {
     visitInputs(expr, context);
   }
 
@@ -100,13 +101,17 @@ private:
     }
   }
 
-  static void callPreVisitor(const Expr& expr, RecursiveExprVisitorContext& ctx) {
+  static void callPreVisitor(
+      const Expr& expr,
+      RecursiveExprVisitorContext& ctx) {
     if (ctx.preExprVisitor) {
       ctx.preExprVisitor(expr);
     }
   }
 
-  static void callPostVisitor(const Expr& expr, RecursiveExprVisitorContext& ctx) {
+  static void callPostVisitor(
+      const Expr& expr,
+      RecursiveExprVisitorContext& ctx) {
     if (ctx.postExprVisitor) {
       ctx.postExprVisitor(expr);
     }
@@ -124,7 +129,7 @@ void visitExprsRecursively(
 void visitExprsRecursively(
     std::span<const SortingField> exprs,
     RecursiveExprVisitorContext& ctx) {
-    RecursiveExprVisitor().visit(exprs, ctx);
+  RecursiveExprVisitor().visit(exprs, ctx);
 }
 
 } // namespace facebook::axiom::logical_plan
