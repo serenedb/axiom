@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <optimizer/QueryGraphContext.h>
 #include "axiom/logical_plan/LogicalPlanNode.h"
 #include "axiom/optimizer/FunctionRegistry.h"
 #include "axiom/optimizer/Schema.h"

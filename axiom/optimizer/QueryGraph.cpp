@@ -395,7 +395,6 @@ PlanObjectCP Expr::singleTable() const {
   columns_.forEach<Column>([&](auto column) {
     if (!table) {
       table = column->relation();
-    } else if (!column->relation()) {
     } else if (table != column->relation()) {
       multiple = true;
     }
@@ -406,11 +405,7 @@ PlanObjectCP Expr::singleTable() const {
 
 PlanObjectSet Expr::allTables() const {
   PlanObjectSet set;
-  columns_.forEach<Column>([&](auto column) {
-    if (column->relation()) {
-      set.add(column->relation());
-    }
-  });
+  columns_.forEach<Column>([&](auto column) { set.add(column->relation()); });
   return set;
 }
 

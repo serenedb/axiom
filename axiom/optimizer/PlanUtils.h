@@ -17,7 +17,6 @@
 #pragma once
 
 #include <folly/Range.h>
-#include <optimizer/Plan.h>
 #include "axiom/logical_plan/Expr.h"
 #include "axiom/optimizer/DerivedTable.h"
 #include "axiom/optimizer/RelationOp.h"

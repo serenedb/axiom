@@ -16,12 +16,9 @@
 
 #include "axiom/optimizer/PlanUtils.h"
 #include <folly/container/F14Map.h>
-#include <optimizer/Plan.h>
-#include <optimizer/PlanObject.h>
-#include <optimizer/QueryGraphContext.h>
-#include <algorithm>
-#include <unordered_map>
+#include "axiom/optimizer/PlanObject.h"
 #include "axiom/optimizer/QueryGraph.h"
+#include "axiom/optimizer/QueryGraphContext.h"
 #include "axiom/optimizer/RelationOp.h"
 
 namespace facebook::axiom::optimizer {
@@ -116,7 +113,7 @@ std::string conjunctsToString(const ExprVector& conjuncts) {
 class WindowsCollector {
  public:
   using SpecToWindows =
-      std::unordered_map<WindowSpec, WindowVector, WindowSpec::Hasher>;
+      folly::F14FastMap<WindowSpec, WindowVector, WindowSpec::Hasher>;
   SpecToWindows collect(std::span<const ExprCP> exprs) {
     for (const auto& expr : exprs) {
       collect(*expr);

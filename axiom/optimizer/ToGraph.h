@@ -15,13 +15,6 @@
  */
 #pragma once
 
-#include <folly/container/F14Map.h>
-#include <logical_plan/Expr.h>
-#include <logical_plan/LogicalPlanNode.h>
-#include <optimizer/QueryGraphContext.h>
-#include <string_view>
-#include <unordered_map>
-#include <vector>
 #include "axiom/optimizer/DerivedTable.h"
 #include "axiom/optimizer/OptimizerOptions.h"
 #include "axiom/optimizer/QueryGraph.h"
@@ -452,7 +445,7 @@ class ToGraph {
   folly::F14FastMap<std::string_view, ColumnCP> lambdaSignature_;
 
   // Maps names in project nodes of input logical plan to deduplicated Exprs.
-  folly::F14FastMap<std::string_view, ExprCP> renames_;
+  folly::F14FastMap<std::string, ExprCP> renames_;
 
   folly::
       F14FastMap<TypedVariant, ExprCP, TypedVariantHasher, TypedVariantComparer>
