@@ -430,12 +430,13 @@ TEST_F(HiveWindowQueriesTest, orderByWithStickyFilter) {
 
     {
         auto plan = toSingleNodePlan(logicalPlan);
-        std::cerr << plan->toString(true, true) << std::endl;
+
         auto matcher = core::PlanMatcherBuilder()
                            .tableScan("nation")
                            .window()
                            .project()
                            .orderBy()
+                       .project()
                             .filter()
                         .build();
         ASSERT_TRUE(matcher->match(plan));

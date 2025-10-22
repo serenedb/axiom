@@ -1925,18 +1925,30 @@ PlanObjectP ToGraph::makeQueryGraph(
       translateJoin(*node.asUnchecked<lp::JoinNode>());
       return currentDt_;
 
-    case lp::NodeKind::kSort:
+    case lp::NodeKind::kSort: {
       // Multiple orderBys are allowed before a limit. Last one wins. Previous
       // are dropped. If arrives after limit, then starts a new DT.
 
+      const auto* sortNode = node.asUnchecked<lp::SortNode>();
+      bool hasWindows = hasWindowFuncs(sortNode->ordering());
+
+      auto previousDt = currentDt_;
+      currentDt_ = hasWindows ? newDt() : previousDt;
       makeQueryGraph(*node.onlyInput(), allowedInDt);
 
       if (currentDt_->hasLimit()) {
         finalizeDt(*node.onlyInput());
       }
 
-      return addOrderBy(*node.asUnchecked<lp::SortNode>());
+      addOrderBy(*node.asUnchecked<lp::SortNode>());
 
+      if (hasWindows) {
+        DerivedTableCP dt = currentDt_;
+        finalizeDt(*sortNode, previousDt);
+      }
+
+      return currentDt_;
+    }
     case lp::NodeKind::kLimit: {
       // Multiple limits are allowed. If already present, then it is combined
       // with the new limit.
