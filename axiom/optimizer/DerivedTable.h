@@ -147,8 +147,6 @@ struct DerivedTable : public PlanObject {
 
   ExprVector having;
 
-  folly::F14FastMap<ColumnCP, WindowCP> columnToWindow;
-
   /// Order by.
   ExprVector orderKeys;
   OrderTypeVector orderTypes;

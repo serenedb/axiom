@@ -13,10 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "axiom/optimizer/DerivedTable.h"
 #include <algorithm>
-#include <iostream>
-#include "axiom/optimizer/DerivedTablePrinter.h"
+#include "axiom/optimizer/DerivedTable.h"
 #include "axiom/optimizer/Optimization.h"
 #include "axiom/optimizer/Plan.h"
 #include "axiom/optimizer/PlanUtils.h"

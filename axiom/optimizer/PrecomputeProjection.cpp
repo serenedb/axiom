@@ -15,7 +15,6 @@
  */
 
 #include "axiom/optimizer/PrecomputeProjection.h"
-#include <optimizer/PlanObject.h>
 
 namespace facebook::axiom::optimizer {
 

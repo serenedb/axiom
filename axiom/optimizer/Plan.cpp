@@ -15,8 +15,6 @@
  */
 
 #include "axiom/optimizer/Plan.h"
-#include <optimizer/PlanObject.h>
-#include <optimizer/QueryGraph.h>
 #include "axiom/optimizer/Cost.h"
 #include "axiom/optimizer/Optimization.h"
 
