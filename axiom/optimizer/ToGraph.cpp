@@ -14,14 +14,6 @@
  * limitations under the License.
  */
 
-#include <fmt/core.h>
-#include <logical_plan/Expr.h>
-#include <logical_plan/LogicalPlanNode.h>
-#include <optimizer/DerivedTable.h>
-#include <optimizer/PlanObject.h>
-#include <optimizer/QueryGraphContext.h>
-#include <optimizer/Schema.h>
-#include <optimizer/ToGraph.h>
 #include <velox/common/base/Exceptions.h>
 #include <algorithm>
 #include <cstdint>
