@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include <folly/container/F14Map.h>
 #include "axiom/optimizer/DerivedTable.h"
 #include "axiom/optimizer/PlanUtils.h"
 #include "axiom/optimizer/RelationOp.h"
