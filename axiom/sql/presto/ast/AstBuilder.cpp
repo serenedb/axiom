@@ -83,25 +83,24 @@ std::any AstBuilder::visitQueryNoWith(
     PrestoSqlParser::QueryNoWithContext* ctx) {
   trace("visitQueryNoWith");
 
-  OrderByPtr orderBy = nullptr;
+  OrderByPtr orderBy;
   if (ctx->ORDER() != nullptr) {
     orderBy = std::make_shared<OrderBy>(
         getLocation(ctx->ORDER()), visitTyped<SortItem>(ctx->sortItem()));
   }
 
-  OffsetPtr offset = nullptr;
+  OffsetPtr offset;
   if (ctx->offset) {
     offset = std::make_shared<Offset>(getLocation(ctx), ctx->offset->getText());
   }
 
   auto limit = getText(ctx->limit);
 
-  auto term = visit(ctx->queryTerm());
-  try {
-    auto querySpec = std::any_cast<std::shared_ptr<QuerySpecification>>(term);
+  auto term = visitTyped<QueryBody>(ctx->queryTerm());
+  if (auto querySpec = std::dynamic_pointer_cast<QuerySpecification>(term)) {
     return std::make_shared<Query>(
         getLocation(ctx),
-        /*with*/ nullptr,
+        /*with=*/nullptr,
         std::make_shared<QuerySpecification>(
             getLocation(ctx),
             querySpec->select(),
@@ -112,11 +111,15 @@ std::any AstBuilder::visitQueryNoWith(
         orderBy,
         offset,
         limit);
-  } catch (const std::bad_any_cast&) {
-    // term is not QuerySpecification.
   }
 
-  throw std::runtime_error("Uninplemented for QueryNoWith");
+  return std::make_shared<Query>(
+      getLocation(ctx),
+      /*with=*/nullptr,
+      term,
+      orderBy,
+      offset,
+      limit);
 }
 
 std::any AstBuilder::visitSelectSingle(
@@ -157,16 +160,17 @@ std::any AstBuilder::visitQuerySpecification(
     from = relation;
   }
 
-  return std::make_shared<QuerySpecification>(
-      getLocation(ctx),
-      std::make_shared<Select>(
-          getLocation(ctx), isDistinct(ctx), std::move(selectItems)),
-      from,
-      visitTyped<Expression>(ctx->where),
-      visitTyped<GroupBy>(ctx->groupBy()),
-      visitTyped<Expression>(ctx->having),
-      nullptr // window
-  );
+  return std::static_pointer_cast<QueryBody>(
+      std::make_shared<QuerySpecification>(
+          getLocation(ctx),
+          std::make_shared<Select>(
+              getLocation(ctx), isDistinct(ctx), std::move(selectItems)),
+          from,
+          visitTyped<Expression>(ctx->where),
+          visitTyped<GroupBy>(ctx->groupBy()),
+          visitTyped<Expression>(ctx->having),
+          nullptr // window
+          ));
 }
 
 std::any AstBuilder::visitSampledRelation(
@@ -771,7 +775,36 @@ std::any AstBuilder::visitQueryTermDefault(
 std::any AstBuilder::visitSetOperation(
     PrestoSqlParser::SetOperationContext* ctx) {
   trace("visitSetOperation");
-  return visitChildren(ctx);
+
+  auto left = visitTyped<QueryBody>(ctx->left);
+  auto right = visitTyped<QueryBody>(ctx->right);
+
+  bool distinct = true;
+  if (ctx->setQuantifier() != nullptr) {
+    if (ctx->setQuantifier()->DISTINCT() != nullptr) {
+      distinct = true;
+    } else if (ctx->setQuantifier()->ALL() != nullptr) {
+      distinct = false;
+    }
+  }
+
+  const auto tokenType = ctx->op->getType();
+  if (tokenType == PrestoSqlParser::UNION) {
+    return std::static_pointer_cast<QueryBody>(
+        std::make_shared<Union>(getLocation(ctx), left, right, distinct));
+  }
+
+  if (tokenType == PrestoSqlParser::EXCEPT) {
+    return std::static_pointer_cast<QueryBody>(
+        std::make_shared<Except>(getLocation(ctx), left, right, distinct));
+  }
+
+  if (tokenType == PrestoSqlParser::INTERSECT) {
+    return std::static_pointer_cast<QueryBody>(
+        std::make_shared<Intersect>(getLocation(ctx), left, right, distinct));
+  }
+
+  throw std::runtime_error("Unsupported set operation: " + ctx->op->getText());
 }
 
 std::any AstBuilder::visitQueryPrimaryDefault(

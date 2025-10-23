@@ -457,6 +457,14 @@ TEST_F(PrestoParserTest, join) {
         matcher);
 
     testSql(
+        "SELECT * FROM nation RIGHT JOIN region ON nation.n_regionkey = region.r_regionkey",
+        matcher);
+
+    testSql(
+        "SELECT * FROM nation n LEFT JOIN region r ON n.n_regionkey = r.r_regionkey",
+        matcher);
+
+    testSql(
         "SELECT * FROM nation FULL OUTER JOIN region ON n_regionkey = r_regionkey",
         matcher);
   }
@@ -485,6 +493,31 @@ TEST_F(PrestoParserTest, join) {
         "SELECT n_name, r_name FROM nation, region WHERE n_regionkey = r_regionkey",
         matcher);
   }
+}
+
+TEST_F(PrestoParserTest, unionAll) {
+  auto matcher =
+      lp::test::LogicalPlanMatcherBuilder().tableScan().project().setOperation(
+          lp::SetOperation::kUnionAll,
+          lp::test::LogicalPlanMatcherBuilder().tableScan().project().build());
+
+  testSql(
+      "SELECT n_name FROM nation UNION ALL SELECT r_name FROM region", matcher);
+}
+
+TEST_F(PrestoParserTest, union) {
+  auto matcher = lp::test::LogicalPlanMatcherBuilder()
+                     .tableScan()
+                     .project()
+                     .setOperation(
+                         lp::SetOperation::kUnionAll,
+                         lp::test::LogicalPlanMatcherBuilder()
+                             .tableScan()
+                             .project()
+                             .build())
+                     .aggregate();
+
+  testSql("SELECT n_name FROM nation UNION SELECT r_name FROM region", matcher);
 }
 
 TEST_F(PrestoParserTest, everything) {

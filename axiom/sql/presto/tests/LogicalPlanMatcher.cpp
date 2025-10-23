@@ -64,6 +64,23 @@ class LogicalPlanMatcherImpl : public LogicalPlanMatcher {
 
   const std::vector<std::shared_ptr<LogicalPlanMatcher>> inputMatchers_;
 };
+
+class SetMatcher : public LogicalPlanMatcherImpl<SetNode> {
+ public:
+  SetMatcher(
+      SetOperation op,
+      const std::shared_ptr<LogicalPlanMatcher>& leftMatcher,
+      const std::shared_ptr<LogicalPlanMatcher>& rightMatcher)
+      : LogicalPlanMatcherImpl<SetNode>({leftMatcher, rightMatcher}), op_{op} {}
+
+ private:
+  bool matchDetails(const SetNode& plan) const override {
+    EXPECT_EQ(plan.operation(), op_);
+    return !::testing::Test::HasNonfatalFailure();
+  }
+
+  SetOperation op_;
+};
 } // namespace
 
 LogicalPlanMatcherBuilder& LogicalPlanMatcherBuilder::tableWrite() {
@@ -117,6 +134,14 @@ LogicalPlanMatcherBuilder& LogicalPlanMatcherBuilder::join(
   VELOX_USER_CHECK_NOT_NULL(matcher_);
   matcher_ = std::make_shared<LogicalPlanMatcherImpl<JoinNode>>(
       std::vector<std::shared_ptr<LogicalPlanMatcher>>{matcher_, rightMatcher});
+  return *this;
+}
+
+LogicalPlanMatcherBuilder& LogicalPlanMatcherBuilder::setOperation(
+    SetOperation op,
+    const std::shared_ptr<LogicalPlanMatcher>& matcher) {
+  VELOX_USER_CHECK_NOT_NULL(matcher_);
+  matcher_ = std::make_shared<SetMatcher>(op, matcher_, matcher);
   return *this;
 }
 

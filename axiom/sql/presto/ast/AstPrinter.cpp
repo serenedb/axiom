@@ -840,15 +840,37 @@ void AstPrinter::visitNaturalJoin(NaturalJoin* node) {
 
 // Set Operations
 void AstPrinter::visitUnion(Union* node) {
-  defaultVisit(node);
+  printHeader("Union", node, [&](std::ostream& out) {
+    if (node->isDistinct()) {
+      out << "distinct";
+    }
+  });
+
+  indent_++;
+  printChild("Left", node->left());
+  printChild("Right", node->right());
+  indent_--;
 }
 
 void AstPrinter::visitIntersect(Intersect* node) {
-  defaultVisit(node);
+  printHeader("Intersect", node, [&](std::ostream& out) {
+    if (node->isDistinct()) {
+      out << "distinct";
+    }
+  });
+
+  indent_++;
+  printChild("Left", node->left());
+  printChild("Right", node->right());
+  indent_--;
 }
 
 void AstPrinter::visitExcept(Except* node) {
-  printHeader("Except", node);
+  printHeader("Except", node, [&](std::ostream& out) {
+    if (node->isDistinct()) {
+      out << "distinct";
+    }
+  });
 
   indent_++;
   printChild("Left", node->left());

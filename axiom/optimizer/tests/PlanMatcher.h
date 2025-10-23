@@ -122,7 +122,7 @@ class PlanMatcherBuilder {
   PlanMatcherBuilder& localPartition();
 
   PlanMatcherBuilder& localPartition(
-      const std::shared_ptr<PlanMatcher>& matcher);
+      std::initializer_list<std::shared_ptr<PlanMatcher>> matcher);
 
   PlanMatcherBuilder& localMerge();
 
@@ -154,6 +154,8 @@ class PlanMatcherBuilder {
       JoinType joinType);
 
   PlanMatcherBuilder& tableWrite();
+
+  PlanMatcherBuilder& window();
 
   std::shared_ptr<PlanMatcher> build() {
     VELOX_USER_CHECK_NOT_NULL(matcher_, "Cannot build an empty PlanMatcher.");

@@ -830,6 +830,7 @@ class RelationPlanner : public AstVisitor {
     if (relation->is(NodeType::kTable)) {
       auto* table = relation->as<Table>();
       builder_->tableScan(table->name()->suffix());
+      builder_->as(table->name()->suffix());
       return;
     }
 
@@ -1131,26 +1132,32 @@ class RelationPlanner : public AstVisitor {
   }
 
   void processQuery(Query* query) {
-    const auto& queryBody = query->queryBody();
+    query->queryBody()->accept(this);
 
-    VELOX_CHECK_NOT_NULL(queryBody);
-    VELOX_CHECK(queryBody->is(NodeType::kQuerySpecification));
-    auto* querySpec = queryBody->as<QuerySpecification>();
+    addOrderBy(query->orderBy());
+    addOffset(query->offset());
+    addLimit(query->limit());
+  }
 
+  void visitQuery(Query* query) override {
+    processQuery(query);
+  }
+
+  void visitQuerySpecification(QuerySpecification* node) override {
     // FROM t -> builder.tableScan(t)
-    processFrom(querySpec->from());
+    processFrom(node->from());
 
     // WHERE a > 1 -> builder.filter("a > 1")
-    addFilter(querySpec->where());
+    addFilter(node->where());
 
-    const auto& selectItems = querySpec->select()->selectItems();
+    const auto& selectItems = node->select()->selectItems();
 
-    if (auto groupBy = querySpec->groupBy()) {
+    if (auto groupBy = node->groupBy()) {
       VELOX_USER_CHECK(
           !groupBy->isDistinct(),
           "GROUP BY with DISTINCT is not supported yet");
       addGroupBy(selectItems, groupBy->groupingElements());
-      addFilter(querySpec->having());
+      addFilter(node->having());
     } else {
       if (isSelectAll(selectItems)) {
         // SELECT *. No project needed.
@@ -1162,20 +1169,30 @@ class RelationPlanner : public AstVisitor {
       }
     }
 
-    if (querySpec->select()->isDistinct()) {
+    if (node->select()->isDistinct()) {
       builder_->aggregate(builder_->findOrAssignOutputNames(), {});
     }
-
-    addOrderBy(query->orderBy());
-    addOffset(query->offset());
-    addLimit(query->limit());
   }
 
-  void visitQuery(Query* query) override {
-    processQuery(query);
-  }
+  void visitUnion(Union* node) override {
+    node->left()->accept(this);
 
-  void visitQuerySpecification(QuerySpecification* node) override {}
+    auto leftBuilder = builder_;
+
+    lp::PlanBuilder::Scope scope;
+    leftBuilder->captureScope(scope);
+
+    builder_ = newBuilder(scope);
+    node->right()->accept(this);
+    auto rightBuilder = builder_;
+
+    builder_ = leftBuilder;
+    builder_->unionAll(*rightBuilder);
+
+    if (node->isDistinct()) {
+      builder_->aggregate(builder_->findOrAssignOutputNames(), {});
+    }
+  }
 
   std::shared_ptr<lp::PlanBuilder> newBuilder(
       const lp::PlanBuilder::Scope& outerScope = nullptr) {

@@ -46,6 +46,10 @@ class LogicalPlanMatcherBuilder {
   LogicalPlanMatcherBuilder& join(
       const std::shared_ptr<LogicalPlanMatcher>& rightMatcher);
 
+  LogicalPlanMatcherBuilder& setOperation(
+      SetOperation op,
+      const std::shared_ptr<LogicalPlanMatcher>& matcher);
+
   LogicalPlanMatcherBuilder& sort();
 
   std::shared_ptr<LogicalPlanMatcher> build() {
