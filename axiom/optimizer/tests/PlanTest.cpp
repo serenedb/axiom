@@ -749,14 +749,15 @@ TEST_F(PlanTest, unionAll) {
         core::PlanMatcherBuilder()
             .hiveScan(
                 "nation", lte("n_nationkey", 10), "(n_regionkey + 1) % 3 = 1")
-            .localPartition(
+            .localPartition({
                 core::PlanMatcherBuilder()
                     .hiveScan(
                         "nation",
                         gte("n_nationkey", 14),
                         "(n_regionkey + 1) % 3 = 1")
                     .project()
-                    .build())
+                    .build(),
+            })
             .project()
             .build();
 
@@ -822,25 +823,25 @@ TEST_F(PlanTest, unionJoin) {
     auto matcher =
         core::PlanMatcherBuilder()
             .hiveScan("partsupp", lte("ps_availqty", 999))
-            .localPartition(
+            .localPartition({
                 core::PlanMatcherBuilder()
                     .hiveScan("partsupp", gte("ps_availqty", 2001))
                     .project()
-                    .localPartition(
-                        core::PlanMatcherBuilder()
-                            .hiveScan(
-                                "partsupp", between("ps_availqty", 1200, 1400))
-                            .project()
-                            .build())
-                    .build())
+                    .build(),
+                core::PlanMatcherBuilder()
+                    .hiveScan("partsupp", between("ps_availqty", 1200, 1400))
+                    .project()
+                    .build(),
+            })
             .hashJoin(
                 core::PlanMatcherBuilder()
                     .hiveScan("part", lt("p_retailprice", 1100.0))
-                    .localPartition(
+                    .localPartition({
                         core::PlanMatcherBuilder()
                             .hiveScan("part", gt("p_retailprice", 1200.0))
                             .project()
-                            .build())
+                            .build(),
+                    })
                     .build(),
                 core::JoinType::kInner)
             .singleAggregation({}, {"sum(1)"})
