@@ -122,6 +122,8 @@ class LocalRunner : public Runner,
   /// Best-effort attempt to cancel the execution.
   void abort() override;
 
+  folly::SemiFuture<folly::Unit> wait();
+
   void waitForCompletion(int32_t maxWaitMicros) override;
 
   State state() const override {
