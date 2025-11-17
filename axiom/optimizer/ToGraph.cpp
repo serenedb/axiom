@@ -1806,8 +1806,9 @@ void ToGraph::addWrite(const lp::TableWriteNode& tableWrite) {
   const auto writeKind =
       static_cast<connector::WriteKind>(tableWrite.writeKind());
   if (writeKind != connector::WriteKind::kInsert &&
-      writeKind != connector::WriteKind::kCreate) {
-    VELOX_NYI("Only INSERT supported for TableWrite");
+      writeKind != connector::WriteKind::kCreate &&
+      writeKind != connector::WriteKind::kDelete) {
+    VELOX_NYI("Only INSERT / DELETE supported for TableWrite");
   }
   VELOX_CHECK_NULL(
       currentDt_->write, "Only one TableWrite per DerivedTable is allowed");
