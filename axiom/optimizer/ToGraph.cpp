@@ -1834,6 +1834,7 @@ void ToGraph::addWrite(const lp::TableWriteNode& tableWrite) {
       const auto& columnExpr = tableWrite.columnExpressions()[nth];
       columnExprs.push_back(translateExpr(columnExpr));
     } else {
+      VELOX_CHECK_NE(writeKind, connector::WriteKind::kDelete);
       const auto* tableColumn = connectorTable->findColumn(columnName);
       VELOX_DCHECK_NOT_NULL(tableColumn);
       columnExprs.push_back(
