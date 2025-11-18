@@ -1648,6 +1648,11 @@ void ToGraph::addJoin(const lp::JoinNode& join, uint64_t allowedInDt) {
   VELOX_DCHECK(!currentDt_->tables.empty());
   auto* rightTable = !isInner ? currentDt_->tables.back() : nullptr;
 
+  exprSources_ = {join.left().get(), join.right().get()};
+  SCOPE_EXIT {
+    exprSources_.clear();
+  };
+
   ExprVector conjuncts;
   translateConjuncts(join.condition(), conjuncts);
 
@@ -1905,40 +1910,6 @@ void ToGraph::makeValuesTable(const lp::ValuesNode& values) {
   currentDt_->addTable(valuesTable);
 }
 
-void ToGraph::addProjection(const lp::ProjectNode& project) {
-  exprSources_ = {project.onlyInput().get()};
-  SCOPE_EXIT {
-    exprSources_.clear();
-  };
-
-  const auto& names = project.names();
-  const auto& exprs = project.expressions();
-  auto channels = usedChannels(project);
-  trace(OptimizerOptions::kPreprocess, [&]() {
-    for (auto i = 0; i < exprs.size(); ++i) {
-      if (std::ranges::find(channels, i) == channels.end()) {
-        std::cout << "P=" << project.id()
-                  << " dropped projection name=" << names[i] << " = "
-                  << lp::ExprPrinter::toText(*exprs[i]) << std::endl;
-      }
-    }
-  });
-
-  for (auto i : channels) {
-    if (exprs[i]->isInputReference()) {
-      const auto& name = exprs[i]->as<lp::InputReferenceExpr>()->name();
-      // A variable projected to itself adds no renames. Inputs contain this
-      // all the time.
-      if (name == names[i]) {
-        continue;
-      }
-    }
-
-    auto expr = translateExpr(exprs.at(i));
-    renames_[names[i]] = expr;
-  }
-}
-
 namespace {
 
 struct Subqueries {
@@ -1977,6 +1948,53 @@ void extractSubqueries(const lp::ExprPtr& expr, Subqueries& subqueries) {
   }
 }
 } // namespace
+
+void ToGraph::addProjection(const lp::ProjectNode& project) {
+  exprSources_ = {project.onlyInput().get()};
+  SCOPE_EXIT {
+    exprSources_.clear();
+  };
+
+  const auto& names = project.names();
+  const auto& exprs = project.expressions();
+  auto channels = usedChannels(project);
+  trace(OptimizerOptions::kPreprocess, [&]() {
+    for (auto i = 0; i < exprs.size(); ++i) {
+      if (std::ranges::find(channels, i) == channels.end()) {
+        std::cout << "P=" << project.id()
+                  << " dropped projection name=" << names[i] << " = "
+                  << lp::ExprPrinter::toText(*exprs[i]) << std::endl;
+      }
+    }
+  });
+
+  Subqueries subqueries;
+  for (auto i : channels) {
+    extractSubqueries(exprs[i], subqueries);
+  }
+  VELOX_CHECK(subqueries.inPredicates.empty());
+  VELOX_CHECK(subqueries.exists.empty());
+  if (!subqueries.scalars.empty()) {
+    for (const auto& subquery : subqueries.scalars) {
+      auto* subqueryDt = translateSubquery(*subquery->subquery());
+      subqueries_.emplace(subquery, subqueryDt->columns.front());
+    }
+  }
+
+  for (auto i : channels) {
+    if (exprs[i]->isInputReference()) {
+      const auto& name = exprs[i]->as<lp::InputReferenceExpr>()->name();
+      // A variable projected to itself adds no renames. Inputs contain this
+      // all the time.
+      if (name == names[i]) {
+        continue;
+      }
+    }
+
+    auto expr = translateExpr(exprs.at(i));
+    renames_[names[i]] = expr;
+  }
+}
 
 DerivedTableP ToGraph::translateSubquery(
     const logical_plan::LogicalPlanNode& node) {
@@ -2538,8 +2556,7 @@ DerivedTableP ToGraph::makeQueryGraph(const lp::LogicalPlanNode& logicalPlan) {
 
 void ToGraph::makeQueryGraph(
     const lp::LogicalPlanNode& node,
-    uint64_t allowedInDt,
-    bool excludeOuterJoins) {
+    uint64_t allowedInDt) {
   if (!contains(allowedInDt, node.kind())) {
     if (node.kind() == lp::NodeKind::kSort) {
       // Sort not allowed doesn't mean we need to wrap it in DT,
@@ -2548,12 +2565,6 @@ void ToGraph::makeQueryGraph(
     } else {
       wrapInDt(node, /*unordered=*/false);
     }
-    return;
-  }
-
-  if (excludeOuterJoins && node.is(lp::NodeKind::kJoin) &&
-      node.as<lp::JoinNode>()->joinType() != lp::JoinType::kInner) {
-    wrapInDt(node);
     return;
   }
 
