@@ -1805,11 +1805,6 @@ void ToGraph::addLimit(const lp::LimitNode& limit) {
 void ToGraph::addWrite(const lp::TableWriteNode& tableWrite) {
   const auto writeKind =
       static_cast<connector::WriteKind>(tableWrite.writeKind());
-  if (writeKind != connector::WriteKind::kInsert &&
-      writeKind != connector::WriteKind::kCreate &&
-      writeKind != connector::WriteKind::kDelete) {
-    VELOX_NYI("Only INSERT / DELETE supported for TableWrite");
-  }
   VELOX_CHECK_NULL(
       currentDt_->write, "Only one TableWrite per DerivedTable is allowed");
   const auto* schemaTable =
@@ -1821,33 +1816,41 @@ void ToGraph::addWrite(const lp::TableWriteNode& tableWrite) {
       tableWrite.connectorId());
   const auto* connectorTable = schemaTable->connectorTable;
   VELOX_DCHECK_NOT_NULL(connectorTable);
-  const auto& tableSchema = *connectorTable->type();
 
   ExprVector columnExprs;
-  columnExprs.reserve(tableSchema.size());
-  for (uint32_t i = 0; i < tableSchema.size(); ++i) {
-    const auto& columnName = tableSchema.nameOf(i);
-
-    auto it = std::ranges::find(tableWrite.columnNames(), columnName);
-    if (it != tableWrite.columnNames().end()) {
-      const auto nth = it - tableWrite.columnNames().begin();
-      const auto& columnExpr = tableWrite.columnExpressions()[nth];
-      columnExprs.push_back(translateExpr(columnExpr));
-    } else {
-      VELOX_CHECK_NE(writeKind, connector::WriteKind::kDelete);
-      const auto* tableColumn = connectorTable->findColumn(columnName);
-      VELOX_DCHECK_NOT_NULL(tableColumn);
-      columnExprs.push_back(
-          make<Literal>(
-              Value{toType(tableColumn->type()), 1},
-              &tableColumn->defaultValue()));
+  const auto& tableExprs = tableWrite.columnExpressions();
+  if (writeKind == connector::WriteKind::kDelete ||
+      writeKind == connector::WriteKind::kUpdate) {
+    columnExprs.reserve(tableExprs.size());
+    for (const auto& expr : tableExprs) {
+      columnExprs.push_back(translateExpr(expr));
     }
-    VELOX_DCHECK(
-        *tableSchema.childAt(i) == *columnExprs.back()->value().type,
-        "Wrong column type: {}, {} vs. {}",
-        columnName,
-        tableSchema.childAt(i)->toString(),
-        columnExprs.back()->value().type->toString());
+  } else {
+    const auto& tableSchema = *connectorTable->type();
+    columnExprs.reserve(tableSchema.size());
+    for (uint32_t i = 0; i < tableSchema.size(); ++i) {
+      const auto& columnName = tableSchema.nameOf(i);
+
+      auto it = std::ranges::find(tableWrite.columnNames(), columnName);
+      if (it != tableWrite.columnNames().end()) {
+        const auto nth = it - tableWrite.columnNames().begin();
+        const auto& columnExpr = tableExprs[nth];
+        columnExprs.push_back(translateExpr(columnExpr));
+      } else {
+        const auto* tableColumn = connectorTable->findColumn(columnName);
+        VELOX_DCHECK_NOT_NULL(tableColumn);
+        columnExprs.push_back(
+            make<Literal>(
+                Value{toType(tableColumn->type()), 1},
+                &tableColumn->defaultValue()));
+      }
+      VELOX_DCHECK(
+          *tableSchema.childAt(i) == *columnExprs.back()->value().type,
+          "Wrong column type: {}, {} vs. {}",
+          columnName,
+          tableSchema.childAt(i)->toString(),
+          columnExprs.back()->value().type->toString());
+    }
   }
 
   renames_.clear();
@@ -1862,8 +1865,11 @@ void ToGraph::addWrite(const lp::TableWriteNode& tableWrite) {
         outputColumn);
   }
 
-  currentDt_->write =
-      make<WritePlan>(*connectorTable, writeKind, std::move(columnExprs));
+  currentDt_->write = make<WritePlan>(
+      *connectorTable,
+      writeKind,
+      std::move(columnExprs),
+      tableWrite.columnNames());
 }
 
 namespace {
