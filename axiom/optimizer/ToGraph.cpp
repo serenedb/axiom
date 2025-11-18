@@ -847,6 +847,9 @@ constexpr uint64_t deny(uint64_t mask, T... op) {
   return (mask & ... & ~allow(op));
 }
 
+constexpr uint64_t kUnorderedAllowedInDt =
+    deny(kAllAllowedInDt, lp::NodeKind::kSort);
+
 } // namespace
 
 std::optional<ExprCP> ToGraph::translateSubfieldFunction(
@@ -1209,6 +1212,9 @@ AggregationPlanCP ToGraph::translateAggregation(const lp::AggregateNode& agg) {
 }
 
 void ToGraph::addOrderBy(const lp::SortNode& order) {
+  VELOX_DCHECK(currentDt_->orderKeys.empty());
+  VELOX_DCHECK(currentDt_->orderTypes.empty());
+
   auto [deduppedOrderKeys, deduppedOrderTypes] =
       dedupOrdering(order.ordering());
 
@@ -1374,9 +1380,9 @@ DerivedTableP ToGraph::newDt() {
   return dt;
 }
 
-void ToGraph::wrapInDt(const lp::LogicalPlanNode& node) {
+void ToGraph::wrapInDt(const lp::LogicalPlanNode& node, bool unordered) {
   auto* outerDt = std::exchange(currentDt_, newDt());
-  makeQueryGraph(node, kAllAllowedInDt);
+  makeQueryGraph(node, unordered ? kUnorderedAllowedInDt : kAllAllowedInDt);
   finalizeDt(node, outerDt);
 }
 
@@ -1637,7 +1643,7 @@ DerivedTableP ToGraph::translateSubquery(
   VELOX_CHECK(correlatedConjuncts_.empty());
 
   auto* outerDt = std::exchange(currentDt_, newDt());
-  makeQueryGraph(node, kAllAllowedInDt);
+  makeQueryGraph(node, kUnorderedAllowedInDt);
   auto* subqueryDt = currentDt_;
   finalizeSubqueryDt(node, outerDt);
 
@@ -1923,7 +1929,7 @@ bool hasNondeterministic(const lp::ExprPtr& expr) {
 void ToGraph::translateSetJoin(const lp::SetNode& set) {
   auto* setDt = currentDt_;
   for (auto& input : set.inputs()) {
-    wrapInDt(*input);
+    wrapInDt(*input, /*unordered=*/true);
   }
 
   const bool exists = set.operation() == lp::SetOperation::kIntersect;
@@ -2032,7 +2038,7 @@ void ToGraph::translateUnion(const lp::SetNode& set) {
   auto translateUnionInput = [&](const lp::LogicalPlanNode& input) {
     renames_ = renames;
     currentDt_ = newDt();
-    makeQueryGraph(input, kAllAllowedInDt);
+    makeQueryGraph(input, kUnorderedAllowedInDt);
     auto* newDt = std::exchange(currentDt_, setDt);
 
     const auto& type = input.outputType();
@@ -2091,7 +2097,13 @@ void ToGraph::makeQueryGraph(
     const lp::LogicalPlanNode& node,
     uint64_t allowedInDt) {
   if (!contains(allowedInDt, node.kind())) {
-    wrapInDt(node);
+    if (node.kind() == lp::NodeKind::kSort) {
+      // Sort not allowed doesn't mean we need to wrap it in DT,
+      // instead we should skip it.
+      makeQueryGraph(*node.onlyInput(), allowedInDt);
+    } else {
+      wrapInDt(node, /*unordered=*/false);
+    }
     return;
   }
 
@@ -2109,7 +2121,10 @@ void ToGraph::makeQueryGraph(
       const auto& filter = *node.as<lp::FilterNode>();
       if (hasNondeterministic(filter.predicate())) {
         auto* outerDt = std::exchange(currentDt_, newDt());
-        makeQueryGraph(input, kAllAllowedInDt);
+        allowedInDt = contains(allowedInDt, lp::NodeKind::kSort)
+            ? kAllAllowedInDt
+            : kUnorderedAllowedInDt;
+        makeQueryGraph(input, allowedInDt);
         addFilter(filter);
         finalizeDt(node, outerDt);
         break;
@@ -2123,13 +2138,12 @@ void ToGraph::makeQueryGraph(
     } break;
     case lp::NodeKind::kAggregate: {
       const auto& input = *node.onlyInput();
-      makeQueryGraph(input, allowedInDt);
+      makeQueryGraph(input, deny(allowedInDt, lp::NodeKind::kSort));
       if (currentDt_->hasAggregation() || currentDt_->hasLimit()) {
         finalizeDt(input);
-      } else if (currentDt_->hasOrderBy()) {
-        currentDt_->orderKeys.clear();
-        currentDt_->orderTypes.clear();
       }
+      VELOX_DCHECK(currentDt_->orderKeys.empty());
+      VELOX_DCHECK(currentDt_->orderTypes.empty());
 
       auto* agg = translateAggregation(*node.as<lp::AggregateNode>());
 
@@ -2209,13 +2223,14 @@ void ToGraph::makeQueryGraph(
     } break;
     case lp::NodeKind::kSort: {
       const auto& input = *node.onlyInput();
-      makeQueryGraph(input, allowedInDt);
+      makeQueryGraph(input, deny(allowedInDt, lp::NodeKind::kSort));
       if (currentDt_->hasLimit()) {
         finalizeDt(input);
       }
       addOrderBy(*node.as<lp::SortNode>());
     } break;
     case lp::NodeKind::kLimit: {
+      allowedInDt |= allow(lp::NodeKind::kSort);
       makeQueryGraph(*node.onlyInput(), allowedInDt);
       addLimit(*node.as<lp::LimitNode>());
     } break;
@@ -2237,7 +2252,7 @@ void ToGraph::makeQueryGraph(
     } break;
     case lp::NodeKind::kTableWrite: {
       VELOX_DCHECK_EQ(allowedInDt, kAllAllowedInDt);
-      wrapInDt(*node.onlyInput());
+      wrapInDt(*node.onlyInput(), /*unordered=*/true);
       addWrite(*node.as<lp::TableWriteNode>());
     } break;
     default:
