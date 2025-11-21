@@ -119,11 +119,12 @@ void DerivedTable::addImpliedJoins() {
 namespace {
 
 bool isSingleRowDt(PlanObjectCP object) {
-  if (object->is(PlanType::kDerivedTableNode)) {
-    auto dt = object->as<DerivedTable>();
-    return dt->limit == 1 ||
-        (dt->aggregation && dt->aggregation->groupingKeys().empty());
-  }
+  // TODO(pashandor789): somewhen we'll fix it.
+  // if (object->is(PlanType::kDerivedTableNode)) {
+  //   auto dt = object->as<DerivedTable>();
+  //   return dt->limit == 1 ||
+  //       (dt->aggregation && dt->aggregation->groupingKeys().empty());
+  // }
   return false;
 }
 
