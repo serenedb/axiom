@@ -408,7 +408,14 @@ class Lambda : public Expr {
   Lambda(ColumnVector args, const velox::Type* type, ExprCP body)
       : Expr(PlanType::kLambdaExpr, Value(type, 1)),
         args_(std::move(args)),
-        body_(body) {}
+        body_(body) {
+    // TODO: not sure about this fix
+    columns_ = body_->columns();
+    for (const auto* arg : args_) {
+      columns_.erase(arg);
+    }
+    // TODO: Think about subexpressions.
+  }
   const ColumnVector& args() const {
     return args_;
   }
