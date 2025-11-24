@@ -329,6 +329,7 @@ void SubfieldTracker::markSubfields(
         return;
       }
     }
+    return;
     VELOX_FAIL("Field not found {}", name);
   }
 

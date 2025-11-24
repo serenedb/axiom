@@ -1859,8 +1859,6 @@ void ToGraph::processSubqueries(const logical_plan::FilterNode& filter) {
       }
     }
 
-    VELOX_CHECK(!leftKeys.empty());
-
     correlatedConjuncts_.clear();
 
     const auto* markColumn = addMarkColumn();

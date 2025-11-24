@@ -117,6 +117,8 @@ PlanP Optimization::bestPlan() {
   topState_.dt = root_;
   topState_.setTargetExprsForDt(targetColumns);
 
+  std::cerr << DerivedTablePrinter::toText(*topState_.dt) << std::endl;
+
   makeJoins(topState_);
 
   return topState_.plans.best();
@@ -1316,9 +1318,9 @@ void Optimization::crossJoin(
 
   PlanObjectSet broadcastTables;
   PlanObjectSet broadcastColumns;
-  for (const auto* buildTable : candidate.tables) {
-    broadcastColumns.unionSet(availableColumns(buildTable));
-    broadcastTables.add(buildTable);
+  for (const auto* table : candidate.tables) {
+    broadcastColumns.unionSet(availableColumns(table));
+    broadcastTables.add(table);
   }
 
   state.columns.unionSet(broadcastColumns);
@@ -1341,14 +1343,60 @@ void Optimization::crossJoin(
     rightPlanState.addCost(*rightOp);
   }
 
-  auto resultColumns = plan->columns();
-  resultColumns.insert(
-      resultColumns.end(),
-      rightOp->columns().begin(),
-      rightOp->columns().end());
+  PlanObjectSet inputColumns;
+  inputColumns.unionObjects(plan->columns());
 
-  auto* join =
-      Join::makeCrossJoin(plan, std::move(rightOp), std::move(resultColumns));
+  // Get markColumn if this is a nested loop join with exists semantics.
+  ColumnCP markColumn = nullptr;
+  if (candidate.join) {
+    const auto [right, left] = candidate.joinSides();
+    markColumn = right.markColumn;
+  }
+
+  ColumnVector resultColumns;
+  PlanObjectSet columnSet;
+  ColumnCP mark = nullptr;
+
+  state.downstreamColumns().forEach<Column>([&](auto column) {
+    if (column == markColumn) {
+      mark = column;
+      columnSet.add(column);
+      return;
+    }
+
+    if (!inputColumns.contains(column) && !broadcastColumns.contains(column)) {
+      return;
+    }
+
+    columnSet.add(column);
+    resultColumns.push_back(column);
+  });
+
+  // If there is an existence flag, it is the rightmost result column.
+  if (mark) {
+    const_cast<Value*>(&mark->value())->trueFraction =
+        std::min<float>(1, candidate.fanout);
+    resultColumns.push_back(mark);
+  }
+  state.columns = columnSet;
+
+  Join* join;
+  if (const bool isCrossJoin = !candidate.join) {
+    join =
+        Join::makeCrossJoin(plan, std::move(rightOp), std::move(resultColumns));
+
+  } else {
+    VELOX_CHECK(
+        candidate.join->leftKeys().empty(),
+        "cross join / nested loop join is expected in cross join processing");
+    const auto [right, left] = candidate.joinSides();
+    join = Join::makeNestedLoopJoin(
+        plan,
+        std::move(rightOp),
+        right.leftJoinType(),
+        candidate.join->filter(),
+        std::move(resultColumns));
+  }
 
   state.addCost(*join);
 
@@ -1407,7 +1455,11 @@ void Optimization::addJoin(
     const RelationOpPtr& plan,
     PlanState& state,
     std::vector<NextJoin>& result) {
-  if (!candidate.join) {
+  const bool isCrossJoin = !candidate.join;
+  const bool isNestedLoopJoin =
+      candidate.join && candidate.join->leftKeys().empty();
+  if (!candidate.join || // isCrossJoin
+      candidate.join->leftKeys().empty()) { // isNestedLoopJoin
     crossJoin(plan, candidate, state, result);
     return;
   }
