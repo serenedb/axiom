@@ -1347,17 +1347,14 @@ void Optimization::crossJoin(
   // Get markColumn if this is a nested loop join with exists semantics.
   ColumnCP markColumn = nullptr;
   if (candidate.join) {
-    const auto [right, _] = candidate.joinSides();
+    const auto right = candidate.join->sideOf(candidate.tables[0], false);
     markColumn = right.markColumn;
   }
 
   ColumnVector resultColumns;
   PlanObjectSet columnSet;
-  ColumnCP mark = nullptr;
-
   state.downstreamColumns().forEach<Column>([&](auto column) {
     if (column == markColumn) {
-      mark = column;
       columnSet.add(column);
       return;
     }
@@ -1371,10 +1368,10 @@ void Optimization::crossJoin(
   });
 
   // If there is an existence flag, it is the rightmost result column.
-  if (mark) {
-    const_cast<Value*>(&mark->value())->trueFraction =
+  if (markColumn) {
+    const_cast<Value*>(&markColumn->value())->trueFraction =
         std::min<float>(1, candidate.fanout);
-    resultColumns.push_back(mark);
+    resultColumns.push_back(markColumn);
   }
   state.columns = columnSet;
 
