@@ -117,8 +117,6 @@ PlanP Optimization::bestPlan() {
   topState_.dt = root_;
   topState_.setTargetExprsForDt(targetColumns);
 
-  std::cerr << DerivedTablePrinter::toText(*topState_.dt) << std::endl;
-
   makeJoins(topState_);
 
   return topState_.plans.best();
@@ -1349,7 +1347,7 @@ void Optimization::crossJoin(
   // Get markColumn if this is a nested loop join with exists semantics.
   ColumnCP markColumn = nullptr;
   if (candidate.join) {
-    const auto [right, left] = candidate.joinSides();
+    const auto [right, _] = candidate.joinSides();
     markColumn = right.markColumn;
   }
 
@@ -1386,10 +1384,11 @@ void Optimization::crossJoin(
         Join::makeCrossJoin(plan, std::move(rightOp), std::move(resultColumns));
 
   } else {
+    const bool isNestedLoopJoin = candidate.join->leftKeys().empty();
     VELOX_CHECK(
-        candidate.join->leftKeys().empty(),
+        isNestedLoopJoin,
         "cross join / nested loop join is expected in cross join processing");
-    const auto [right, left] = candidate.joinSides();
+    const auto [right, _] = candidate.joinSides();
     join = Join::makeNestedLoopJoin(
         plan,
         std::move(rightOp),
