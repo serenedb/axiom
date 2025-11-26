@@ -1482,14 +1482,60 @@ void Optimization::crossJoin(
     rightPlanState.addCost(*rightOp);
   }
 
-  auto resultColumns = plan->columns();
-  resultColumns.insert(
-      resultColumns.end(),
-      rightOp->columns().begin(),
-      rightOp->columns().end());
+  PlanObjectSet inputColumns;
+  inputColumns.unionObjects(plan->columns());
 
-  auto* join =
-      Join::makeCrossJoin(plan, std::move(rightOp), std::move(resultColumns));
+  ColumnVector columns;
+  PlanObjectSet columnSet;
+
+  auto* join = [&] {
+    if (!candidate.join) {
+      state.downstreamColumns().forEach<Column>([&](auto column) {
+        if (!inputColumns.contains(column) &&
+            !broadcastColumns.contains(column)) {
+          return;
+        }
+
+        columnSet.add(column);
+        columns.push_back(column);
+      });
+      return Join::makeCrossJoin(plan, std::move(rightOp), std::move(columns));
+    }
+    const auto right = candidate.join->sideOf(candidate.tables[0], false);
+    const auto joinType = right.leftJoinType();
+    const bool inputOnly = joinType == velox::core::JoinType::kLeftSemiProject;
+    ColumnCP mark = nullptr;
+    state.downstreamColumns().forEach<Column>([&](auto column) {
+      if (column == right.markColumn) {
+        mark = column;
+        return;
+      }
+
+      if ((inputOnly || !broadcastColumns.contains(column)) &&
+          !inputColumns.contains(column)) {
+        return;
+      }
+
+      columnSet.add(column);
+      columns.push_back(column);
+    });
+
+    // If there is an existence flag, it is the rightmost result column.
+    if (mark) {
+      setMarkTrueFraction(
+          mark, joinType, candidate.fanout, candidate.join->rlFanout());
+      columnSet.add(mark);
+      columns.push_back(mark);
+    }
+
+    return Join::makeNestedLoopJoin(
+        plan,
+        std::move(rightOp),
+        right.leftJoinType(),
+        candidate.join->filter(),
+        std::move(columns));
+  }();
+  state.columns = std::move(columnSet);
 
   state.addCost(*join);
 
@@ -1548,7 +1594,7 @@ void Optimization::addJoin(
     const RelationOpPtr& plan,
     PlanState& state,
     std::vector<NextJoin>& result) {
-  if (!candidate.join) {
+  if (!candidate.join || candidate.join->leftKeys().empty()) {
     crossJoin(plan, candidate, state, result);
     return;
   }
