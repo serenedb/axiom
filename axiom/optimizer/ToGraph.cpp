@@ -2079,8 +2079,6 @@ void ToGraph::processSubqueries(
       }
     }
 
-    VELOX_CHECK(!leftKeys.empty());
-
     correlatedConjuncts_.clear();
 
     const auto* markColumn = addMarkColumn();
