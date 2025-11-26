@@ -1381,7 +1381,7 @@ void Optimization::crossJoin(
         Join::makeCrossJoin(plan, std::move(rightOp), std::move(resultColumns));
 
   } else {
-    const bool isNestedLoopJoin = candidate.join->leftKeys().empty();
+    const bool isNestedLoopJoin = candidate.join->numKeys() == 0;
     VELOX_CHECK(
         isNestedLoopJoin,
         "cross join / nested loop join is expected in cross join processing");
@@ -1451,11 +1451,8 @@ void Optimization::addJoin(
     const RelationOpPtr& plan,
     PlanState& state,
     std::vector<NextJoin>& result) {
-  const bool isCrossJoin = !candidate.join;
-  const bool isNestedLoopJoin =
-      candidate.join && candidate.join->leftKeys().empty();
   if (!candidate.join || // isCrossJoin
-      candidate.join->leftKeys().empty()) { // isNestedLoopJoin
+      candidate.join->numKeys() == 0) { // isNestedLoopJoin
     crossJoin(plan, candidate, state, result);
     return;
   }
