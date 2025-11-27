@@ -211,7 +211,7 @@ PlanObjectSet PlanState::computeDownstreamColumns(bool includeFilters) const {
 
   auto addExpr = [&](ExprCP expr) { result.unionColumns(translateExpr(expr)); };
 
-  auto addExprs = [&](ExprVector exprs) {
+  auto addExprs = [&](const ExprVector& exprs) {
     for (auto expr : exprs) {
       addExpr(expr);
     }
