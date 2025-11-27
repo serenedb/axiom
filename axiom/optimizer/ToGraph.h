@@ -230,7 +230,7 @@ class ToGraph {
   void translateConjuncts(const logical_plan::ExprPtr& input, ExprVector& flat);
 
   // Adds a JoinEdge corresponding to 'join' to the enclosing DerivedTable.
-  void translateJoin(const logical_plan::JoinNode& join);
+  void addJoin(const logical_plan::JoinNode& join, uint64_t allowedInDt);
 
   // Given an INTERSECT or an EXCEPT set operation, create derived tables for
   // inputs, add them to 'currentDt_' and connect them with join edges.
@@ -346,11 +346,6 @@ class ToGraph {
   DerivedTableP translateSubquery(const logical_plan::LogicalPlanNode& node);
 
   ColumnCP addMarkColumn();
-
-  void addJoinColumns(
-      const logical_plan::LogicalPlanNode& joinSide,
-      ColumnVector& columns,
-      ExprVector& exprs);
 
   // Cache of resolved table schemas.
   Schema schema_;

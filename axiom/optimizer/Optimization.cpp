@@ -1150,75 +1150,6 @@ void Optimization::joinByIndex(
 
 namespace {
 
-struct ProjectionBuilder {
-  ColumnVector columns;
-  ExprVector exprs;
-
-  // Project 'expr' as 'column'.
-  void add(ColumnCP column, ExprCP expr) {
-    VELOX_DCHECK(
-        expr->isColumn(), "Expr is not a column: {}", expr->toString());
-    columns.emplace_back(column);
-    exprs.emplace_back(expr);
-  }
-
-  RelationOp* build(RelationOp* input) {
-    return make<Project>(
-        input, exprs, columns, Project::isRedundant(input, exprs, columns));
-  }
-
-  ColumnVector inputColumns() const {
-    ColumnVector columns;
-    columns.reserve(exprs.size());
-    for (const auto* expr : exprs) {
-      VELOX_DCHECK(
-          expr->isColumn(), "Expr is not a column: {}", expr->toString());
-      columns.emplace_back(expr->as<Column>());
-    }
-
-    return columns;
-  }
-
-  PlanObjectSet outputColumns() const {
-    PlanObjectSet columnSet;
-    columnSet.unionObjects(columns);
-    return columnSet;
-  }
-};
-
-namespace {
-
-folly::F14FastMap<PlanObjectCP, ExprCP> makeJoinColumnMapping(
-    JoinEdgeP joinEdge) {
-  folly::F14FastMap<PlanObjectCP, ExprCP> mapping;
-  for (auto i = 0; i < joinEdge->leftColumns().size(); ++i) {
-    mapping.emplace(joinEdge->leftColumns()[i], joinEdge->leftExprs()[i]);
-  }
-
-  for (auto i = 0; i < joinEdge->rightColumns().size(); ++i) {
-    mapping.emplace(joinEdge->rightColumns()[i], joinEdge->rightExprs()[i]);
-  }
-
-  return mapping;
-}
-
-// Translates columns from outside the join to columns below the join if there
-// is a rename, as in the case of optional sides of outer joins.
-PlanObjectSet translateToJoinInput(
-    const PlanObjectSet& columns,
-    const folly::F14FastMap<PlanObjectCP, ExprCP>& mapping) {
-  PlanObjectSet result;
-  columns.forEach([&](PlanObjectCP object) {
-    auto it = mapping.find(object);
-    if (it != mapping.end()) {
-      result.add(it->second);
-    } else {
-      result.add(object);
-    }
-  });
-  return result;
-}
-
 // Check if 'mark' column produced by a SemiProject join is used only to
 // filter the results using 'mark' or 'not(mark)' condition. If so, replace
 // the join with a SemiFilter and remove the filter.
@@ -1286,16 +1217,12 @@ void Optimization::joinByHash(
     buildTables.add(buildTable);
   }
 
-  // Mapping from join output column to probe or build side input.
-  auto joinColumnMapping = makeJoinColumnMapping(candidate.join);
-
   // The build side dt does not need to produce columns that it uses
   // internally, only the columns that are downstream if we consider
   // the build to be placed. So, provisionally mark build side tables
   // as placed for the downstreamColumns().
   state.placed.unionSet(buildTables);
-  buildColumns.intersect(
-      translateToJoinInput(state.downstreamColumns(), joinColumnMapping));
+  buildColumns.intersect(state.downstreamColumns());
 
   buildColumns.unionColumns(build.keys);
   buildColumns.unionSet(buildFilterColumns);
@@ -1364,45 +1291,13 @@ void Optimization::joinByHash(
   PlanObjectSet probeColumns;
   probeColumns.unionObjects(plan->columns());
 
+  ColumnVector columns;
+  PlanObjectSet columnSet;
   ColumnCP mark = nullptr;
-
-  auto* joinEdge = candidate.join;
-
-  PlanObjectSet joinColumns;
-  joinColumns.unionObjects(joinEdge->leftColumns());
-  joinColumns.unionObjects(joinEdge->rightColumns());
-
-  // Non-trivial projections over input needed by the join must be computed
-  // first. These projections include expressions used in join keys and
-  // joinEdge.{right, left}Columns.
-
-  PrecomputeProjection precomputeProbe(probeInput, state.dt);
-  auto leftColumns = precomputeProbe.toColumns(
-      joinEdge->leftExprs(), &joinEdge->leftColumns());
-  auto probeKeys = precomputeProbe.toColumns(probe.keys);
-  probeInput = std::move(precomputeProbe).maybeProject();
-
-  PrecomputeProjection precomputeBuild(buildInput, state.dt);
-  auto rightColumns = precomputeBuild.toColumns(
-      joinEdge->rightExprs(), &joinEdge->rightColumns());
-  auto buildKeys = precomputeBuild.toColumns(build.keys);
-  buildInput = std::move(precomputeBuild).maybeProject();
-
-  joinColumnMapping =
-      makeJoinColumnMapping(candidate.join, leftColumns, rightColumns);
-
-  ProjectionBuilder projectionBuilder;
-  bool needsProjection = false;
 
   state.downstreamColumns().forEach<Column>([&](auto column) {
     if (column == build.markColumn) {
       mark = column;
-      return;
-    }
-
-    if (joinColumns.contains(column)) {
-      projectionBuilder.add(column, joinColumnMapping.at(column));
-      needsProjection = true;
       return;
     }
 
@@ -1411,7 +1306,8 @@ void Optimization::joinByHash(
       return;
     }
 
-    projectionBuilder.add(column, column);
+    columnSet.add(column);
+    columns.push_back(column);
   });
 
   if (mark) {
@@ -1423,10 +1319,11 @@ void Optimization::joinByHash(
 
   // If there is an existence flag, it is the rightmost result column.
   if (mark) {
-    projectionBuilder.add(mark, mark);
+    columnSet.add(mark);
+    columns.push_back(mark);
   }
 
-  state.columns = projectionBuilder.outputColumns();
+  state.columns = columnSet;
 
   const auto fanout = fanoutJoinTypeLimit(
       joinType,
@@ -1476,14 +1373,10 @@ void Optimization::joinByHash(
       std::move(buildKeys),
       candidate.join->filter(),
       fanout,
-      projectionBuilder.inputColumns());
+      std::move(columns));
 
   state.addCost(*join);
   state.cost.cost += buildState.cost.cost;
-
-  if (needsProjection) {
-    join = projectionBuilder.build(join);
-  }
 
   state.addNextJoin(&candidate, join, toTry);
 }
@@ -1570,28 +1463,13 @@ void Optimization::joinByHashRight(
       rightJoinType == velox::core::JoinType::kRightSemiFilter ||
       rightJoinType == velox::core::JoinType::kRightSemiProject;
 
+  ColumnVector columns;
+  PlanObjectSet columnSet;
   ColumnCP mark = nullptr;
-
-  PlanObjectSet joinColumns;
-  joinColumns.unionObjects(joinEdge->leftColumns());
-  joinColumns.unionObjects(joinEdge->rightColumns());
-
-  // Mapping from join output column to probe or build side input.
-  auto joinColumnMapping =
-      makeJoinColumnMapping(joinEdge, leftColumns, rightColumns);
-
-  ProjectionBuilder projectionBuilder;
-  bool needsProjection = false;
 
   state.downstreamColumns().forEach<Column>([&](auto column) {
     if (column == probe.markColumn) {
       mark = column;
-      return;
-    }
-
-    if (joinColumns.contains(column)) {
-      projectionBuilder.add(column, joinColumnMapping.at(column));
-      needsProjection = true;
       return;
     }
 
@@ -1600,7 +1478,8 @@ void Optimization::joinByHashRight(
       return;
     }
 
-    projectionBuilder.add(column, column);
+    columnSet.add(column);
+    columns.push_back(column);
   });
 
   if (mark) {
@@ -1612,7 +1491,8 @@ void Optimization::joinByHashRight(
 
   // If there is an existence flag, it is the rightmost result column.
   if (mark) {
-    projectionBuilder.add(mark, mark);
+    columnSet.add(mark);
+    columns.push_back(mark);
   }
 
   const auto fanout = fanoutJoinTypeLimit(
@@ -1623,7 +1503,7 @@ void Optimization::joinByHashRight(
 
   const auto buildCost = state.cost;
 
-  state.columns = projectionBuilder.outputColumns();
+  state.columns = columnSet;
   state.cost = probeState.cost;
   state.cost.cost += buildCost.cost;
 
@@ -1646,12 +1526,8 @@ void Optimization::joinByHashRight(
       std::move(buildKeys),
       candidate.join->filter(),
       fanout,
-      projectionBuilder.inputColumns());
+      std::move(columns));
   state.addCost(*join);
-
-  if (needsProjection) {
-    join = projectionBuilder.build(join);
-  }
 
   state.addNextJoin(&candidate, join, toTry);
 }
@@ -1898,6 +1774,19 @@ bool Optimization::placeConjuncts(
   state.dt->singleRowDts.forEach<DerivedTable>(
       [&](auto dt) { columnsAndSingles.unionObjects(dt->columns); });
 
+  PlanObjectSet noPushdownTables;
+  if (!joinsPlaced) {
+    for (const auto* join : state.dt->joins) {
+      if (join->leftOptional()) {
+        // No pushdown to the left side of a RIGHT or FULL join.
+        noPushdownTables.add(join->leftTable());
+      }
+      if (join->rightOptional()) {
+        // No pushdown to the right side of a LEFT or FULL join.
+        noPushdownTables.add(join->rightTable());
+      }
+    }
+  }
   ExprVector filters;
   for (auto& conjunct : state.dt->conjuncts) {
     if (!joinsPlaced && conjunct->containsNonDeterministic()) {
@@ -1905,6 +1794,12 @@ bool Optimization::placeConjuncts(
     }
     if (state.placed.contains(conjunct)) {
       continue;
+    }
+    if (!joinsPlaced) {
+      const auto* singleTable = conjunct->singleTable();
+      if (singleTable && noPushdownTables.contains(singleTable)) {
+        continue;
+      }
     }
     if (conjunct->columns().isSubset(state.columns)) {
       state.columns.add(conjunct);
