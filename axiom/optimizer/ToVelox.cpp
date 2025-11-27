@@ -1058,15 +1058,16 @@ velox::core::PlanNodePtr ToVelox::makeProject(
     runner::ExecutableFragment& fragment,
     std::vector<runner::ExecutableFragment>& stages) {
   auto input = makeFragment(project.input(), fragment, stages);
+
+  if (project.isRedundant()) {
+    return input;
+  }
+
   if (optimizerOptions_.parallelProjectWidth > 1) {
     auto result = maybeParallelProject(&project, input);
     if (result) {
       return result;
     }
-  }
-
-  if (project.isRedundant()) {
-    return input;
   }
 
   const auto numOutputs = project.exprs().size();
@@ -1381,12 +1382,8 @@ velox::core::PlanNodePtr ToVelox::makeValues(
     }
   }
 
-  auto valuesNode =
-      std::make_shared<velox::core::ValuesNode>(nextId(), std::move(newValues));
-
-  makePredictionAndHistory(valuesNode->id(), &values);
-
-  return valuesNode;
+  return std::make_shared<velox::core::ValuesNode>(
+      nextId(), std::move(newValues));
 }
 
 velox::core::PlanNodePtr ToVelox::makeWrite(
