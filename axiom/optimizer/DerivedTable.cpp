@@ -216,19 +216,17 @@ void DerivedTable::linkTablesToJoins() {
   // from all the tables it depends on.
   for (auto join : joins) {
     PlanObjectSet tables;
-    if (join->isInner() && join->directed()) {
+    if (join->leftTable()) {
       tables.add(join->leftTable());
     } else {
       for (auto key : join->leftKeys()) {
-        tables.unionSet(key->allTables());
-      }
-      for (auto key : join->rightKeys()) {
         tables.unionSet(key->allTables());
       }
       for (auto conjunct : join->filter()) {
         tables.unionSet(conjunct->allTables());
       }
     }
+    tables.add(join->rightTable());
     tables.forEachMutable([&](PlanObjectP table) {
       if (table->is(PlanType::kTableNode)) {
         table->as<BaseTable>()->addJoinedBy(join);
@@ -485,22 +483,11 @@ bool DerivedTable::isWrapOnly() const {
       exprs.empty();
 }
 
-ExprCP DerivedTable::exportExpr(ExprCP expr) {
-  expr->columns().forEach<Column>([&](auto* column) {
-    if (tableSet.contains(column->relation())) {
-      if (pushBackUnique(exprs, column)) {
-        const auto* columnName = toName(column->name());
-        auto outer =
-            make<Column>(columnName, this, column->value(), columnName);
-        columns.push_back(outer);
-      }
-    }
-  });
-
+ExprCP DerivedTable::exportExpr(ExprCP expr) const {
   return replaceInputs(expr, exprs, columns);
 }
 
-ExprCP DerivedTable::importExpr(ExprCP expr) {
+ExprCP DerivedTable::importExpr(ExprCP expr) const {
   return replaceInputs(expr, columns, exprs);
 }
 
@@ -524,7 +511,7 @@ void DerivedTable::importJoinsIntoFirstDt(const DerivedTable* firstDt) {
 
   auto* newFirst = make<DerivedTable>(*firstDt->as<DerivedTable>());
 
-  const int32_t previousNumJoins = newFirst->joins.size();
+  const size_t previousNumJoins = newFirst->joins.size();
   for (auto& join : joins) {
     auto other = join->otherSide(firstDt);
     if (!other) {
@@ -821,12 +808,12 @@ ExprVector extractCommon(ExprVector& disjuncts, ExprCP* replacement) {
 // conjuncts from outer DTs.
 void expandConjuncts(ExprVector& conjuncts) {
   bool any = false;
-  auto firstUnprocessed = 0;
+  size_t firstUnprocessed = 0;
   do {
     any = false;
 
     const auto end = conjuncts.size();
-    for (auto i = firstUnprocessed; i < end; ++i) {
+    for (size_t i = firstUnprocessed; i < end; ++i) {
       const auto& conjunct = conjuncts[i];
       if (isCallExpr(conjunct, SpecialFormCallNames::kOr) &&
           !conjunct->containsNonDeterministic()) {
@@ -919,11 +906,15 @@ void DerivedTable::distributeConjuncts() {
       }
 
       if (tables[0]->is(PlanType::kValuesTableNode)) {
-        continue; // ValuesTable does not have filter push-down.
+        continue; // ValuesTable does not have filter pushdown.
       }
 
       if (tables[0]->is(PlanType::kUnnestTableNode)) {
-        continue; // UnnestTable does not have filter push-down.
+        // UnnestTable does not implement filter pushdown yet.
+        // TODO: We can push down predicate to left side of unnest if
+        // 1. it only depends on the replicated columns
+        // 2. we can make subfield access for unnested columns
+        continue;
       }
 
       if (tables[0]->is(PlanType::kDerivedTableNode)) {

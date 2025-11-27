@@ -161,12 +161,12 @@ struct DerivedTable : public PlanObject {
 
   /// Return a copy of 'expr', replacing references to this DT's 'columns' with
   /// corresponding 'exprs'.
-  ExprCP importExpr(ExprCP expr);
+  ExprCP importExpr(ExprCP expr) const;
 
   /// Returns a copy of 'expr', replacing references to this DT's 'exprs' with
   /// the corresponding 'columns'. If 'expr' references columns not present in
   /// DT's output, those columns are added.
-  ExprCP exportExpr(ExprCP expr);
+  ExprCP exportExpr(ExprCP expr) const;
 
   bool isTable() const override {
     return true;
