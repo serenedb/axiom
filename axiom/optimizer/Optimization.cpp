@@ -142,8 +142,7 @@ void reducingJoinsRecursive(
         resultFunc = {}) {
   bool isLeaf = true;
   for (auto join : joinedBy(candidate)) {
-    if (join->isLeftOuter() && join->leftTable() != nullptr &&
-        candidate == join->rightTable() &&
+    if (join->isLeftOuter() && candidate == join->rightTable() &&
         candidate->is(PlanType::kDerivedTableNode)) {
       // One can restrict the build of the optional side by a restriction on the
       // probe. This happens specially when value subqueries are represented as
@@ -314,7 +313,6 @@ std::optional<JoinCandidate> reducingJoins(
 // Calls 'func' with join, joined table and fanout for the joinable tables.
 template <typename Func>
 void forJoinedTables(const PlanState& state, Func func) {
-  folly::F14FastSet<JoinEdgeP> visited;
   state.placed.forEach([&](PlanObjectCP placedTable) {
     if (!placedTable->isTable()) {
       return;
@@ -322,19 +320,10 @@ void forJoinedTables(const PlanState& state, Func func) {
 
     for (auto join : joinedBy(placedTable)) {
       if (join->isNonCommutative()) {
-        if (!visited.insert(join).second) {
+        if (placedTable != join->leftTable()) {
           continue;
         }
-        bool usable = true;
-        for (auto key : join->leftKeys()) {
-          if (!key->allTables().isSubset(state.placed)) {
-            // All items that the left key depends on must be placed.
-            usable = false;
-            break;
-          }
-        }
-        if (usable &&
-            (state.mayConsiderNext(join->rightTable()) || join->markColumn())) {
+        if (state.mayConsiderNext(join->rightTable()) || join->markColumn()) {
           func(join, join->rightTable(), join->lrFanout());
         }
       } else {
