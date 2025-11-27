@@ -153,7 +153,7 @@ class ToVelox {
       runner::ExecutableFragment& fragment,
       std::vector<runner::ExecutableFragment>& stages);
 
-  // @pre op.sNoLimit() is true.
+  // @pre op.isNoLimit() is true.
   velox::core::PlanNodePtr makeOffset(
       const Limit& op,
       runner::ExecutableFragment& fragment,
