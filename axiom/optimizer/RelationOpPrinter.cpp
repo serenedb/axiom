@@ -66,7 +66,7 @@ class ToTextVisitor : public RelationOpVisitor {
     printHeader(
         op,
         myCtx,
-        op.distribution().isBroadcast ? "(broadcast)"
+        op.distribution().isBroadcast() ? "(broadcast)"
             : op.distribution().isGather()
             ? "(gather)"
             : fmt::format("({})", exprsToString(op.distribution().partition)));
