@@ -842,7 +842,7 @@ struct ValuesTable : public PlanObject {
   JoinEdgeVector joinedBy;
 
   float cardinality() const {
-    return cardinality_;
+    return std::max<float>(cardinality_, 1);
   }
 
   bool isTable() const override {
