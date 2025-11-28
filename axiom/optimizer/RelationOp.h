@@ -245,7 +245,11 @@ class RelationOp {
 
   /// Returns the number of output rows.
   float resultCardinality() const {
-    return cost_.resultCardinality();
+    const auto resultCardinality = cost_.resultCardinality();
+    if (std::isfinite(resultCardinality)) {
+      return resultCardinality;
+    }
+    return 1;
   }
 
   /// @return 1 for a leaf node, otherwise returns 'resultCardinality()' of the

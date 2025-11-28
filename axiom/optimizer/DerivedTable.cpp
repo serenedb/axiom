@@ -160,9 +160,9 @@ PlanObjectSet findSingleRowDts(
 } // namespace
 
 void DerivedTable::setStartTables() {
-  singleRowDts = findSingleRowDts(tableSet, joins);
+  // singleRowDts = findSingleRowDts(tableSet, joins);
   startTables = tableSet;
-  startTables.except(singleRowDts);
+  // startTables.except(singleRowDts);
   for (auto join : joins) {
     if (join->isNonCommutative()) {
       startTables.erase(join->rightTable());

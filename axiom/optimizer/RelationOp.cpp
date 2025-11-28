@@ -1174,7 +1174,7 @@ Limit::Limit(RelationOpPtr input, int64_t limit, int64_t offset)
   VELOX_DCHECK_GE(limit, 0);
   cost_.inputCardinality = inputCardinality();
   cost_.unitCost = 0.01;
-  const auto cardinality = static_cast<float>(std::max<int64_t>(limit, 1));
+  const auto cardinality = static_cast<float>(limit);
   if (cost_.inputCardinality <= cardinality) {
     // Input cardinality does not exceed the limit. The limit is no-op. Doesn't
     // change cardinality.
