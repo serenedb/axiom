@@ -641,6 +641,21 @@ std::vector<velox::core::FieldAccessTypedExprPtr> ToVelox::toFieldRefs(
   return fields;
 }
 
+velox::core::PlanNodePtr ToVelox::makeZeroLimit(
+    const RelationOp& op,
+    runner::ExecutableFragment& fragment) {
+  fragment.width = 1;
+  const auto& newColumns = op.columns();
+  auto newType = makeOutputType(newColumns);
+  VELOX_DCHECK_EQ(newColumns.size(), newType->size());
+  std::vector<velox::RowVectorPtr> newValues;
+  auto* pool = queryCtx()->optimization()->evaluator()->pool();
+  auto newValue = std::make_shared<velox::RowVector>(
+      pool, std::move(newType), nullptr, 0, std::vector<velox::VectorPtr>{});
+  return std::make_shared<velox::core::ValuesNode>(
+      nextId(), std::vector{std::move(newValue)});
+}
+
 velox::core::PlanNodePtr ToVelox::makeOrderBy(
     const OrderBy& op,
     runner::ExecutableFragment& fragment,
@@ -652,7 +667,7 @@ velox::core::PlanNodePtr ToVelox::makeOrderBy(
     auto input = makeFragment(op.input(), fragment, stages);
 
     if (options_.numDrivers == 1) {
-      if (op.limit <= 0) {
+      if (!op.hasLimit()) {
         return std::make_shared<velox::core::OrderByNode>(
             nextId(), keys, sortOrder, false, input);
       }
@@ -668,7 +683,7 @@ velox::core::PlanNodePtr ToVelox::makeOrderBy(
     }
 
     velox::core::PlanNodePtr node;
-    if (op.limit <= 0) {
+    if (!op.hasLimit()) {
       node = std::make_shared<velox::core::OrderByNode>(
           nextId(), keys, sortOrder, true, input);
     } else {
@@ -678,7 +693,7 @@ velox::core::PlanNodePtr ToVelox::makeOrderBy(
 
     node = addLocalMerge(nextId(), keys, sortOrder, node);
 
-    if (op.limit > 0) {
+    if (op.hasLimit()) {
       return addFinalLimit(nextId(), op.offset, op.limit, node);
     }
 
@@ -689,7 +704,7 @@ velox::core::PlanNodePtr ToVelox::makeOrderBy(
   auto input = makeFragment(op.input(), source, stages);
 
   velox::core::PlanNodePtr node;
-  if (op.limit <= 0) {
+  if (!op.hasLimit()) {
     node = std::make_shared<velox::core::OrderByNode>(
         nextId(), keys, sortOrder, true, input);
   } else {
@@ -709,7 +724,7 @@ velox::core::PlanNodePtr ToVelox::makeOrderBy(
   fragment.inputStages.emplace_back(merge->id(), source.taskPrefix);
   stages.push_back(std::move(source));
 
-  if (op.limit > 0) {
+  if (op.hasLimit()) {
     return addFinalLimit(nextId(), op.offset, op.limit, merge);
   }
   return merge;
@@ -746,6 +761,9 @@ velox::core::PlanNodePtr ToVelox::makeLimit(
     const Limit& op,
     runner::ExecutableFragment& fragment,
     std::vector<runner::ExecutableFragment>& stages) {
+  if (op.limit == 0) {
+    return makeZeroLimit(op, fragment);
+  }
   if (op.isNoLimit()) {
     return makeOffset(op, fragment, stages);
   }
