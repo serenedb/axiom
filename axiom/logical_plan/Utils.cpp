@@ -83,7 +83,7 @@ class RecursiveExprVisitor : public ExprVisitor {
 
   void visit(const SubqueryExpr& expr, ExprVisitorContext& context)
       const override {
-    VELOX_FAIL("SubqueryExpr is not supported for the recursive visitor");
+    // All usages of the class doesn't need to visit the subquery.
   }
 
   void visitInputs(const Expr& expr, ExprVisitorContext& ctx) const {
