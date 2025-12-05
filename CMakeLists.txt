@@ -46,7 +46,8 @@ set(VELOX_BUILD_VECTOR_TEST_UTILS ON CACHE BOOL "Velox vector test utilities (Ve
 
 set(VELOX_ENABLE_PARQUET ON)
 set(VELOX_BUILD_TEST_UTILS ON)
-set(VELOX_BUILD_TESTING OFF)
+set(VELOX_BUILD_TESTING ON)
+set(VELOX_ENABLE_BENCHMARKS ON)
 
 set(VELOX_DEPENDENCY_SOURCE AUTO CACHE STRING "Default dependency source: AUTO SYSTEM or BUNDLED.")
 
@@ -130,8 +131,6 @@ endif()
 
 message("FINAL CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 
-include(CTest) # include after project() but before add_subdirectory()
-
 velox_set_source(gtest)
 velox_resolve_dependency(gtest)
 
@@ -163,6 +162,12 @@ include_directories(SYSTEM ${CMAKE_BINARY_DIR}/_deps/xsimd-src/include/)
 include_directories(${ANTLR4_INCLUDE_DIR})
 
 add_subdirectory(velox)
+
+if(AXIOM_BUILD_TESTING)
+  set(BUILD_TESTING ON)
+  include(CTest) # include after project() but before add_subdirectory()
+endif()
+
 add_subdirectory(axiom/common)
 add_subdirectory(axiom/sql/presto)
 add_subdirectory(axiom/logical_plan)
