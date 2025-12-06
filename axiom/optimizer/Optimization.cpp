@@ -155,9 +155,7 @@ void reducingJoinsRecursive(
     if (!state.dt->hasTable(other.table) || !state.dt->hasJoin(join)) {
       continue;
     }
-    if (other.table->isNot(PlanType::kTableNode) &&
-        other.table->isNot(PlanType::kValuesTableNode) &&
-        other.table->isNot(PlanType::kUnnestTableNode)) {
+    if (other.table->is(PlanType::kDerivedTableNode)) {
       continue;
     }
     if (visited.contains(other.table)) {
@@ -1345,10 +1343,6 @@ void Optimization::joinByHashRight(
 
   // Change the join type to the right join variant.
   auto joinType = reverseJoinType(probe.leftJoinType);
-  VELOX_CHECK_NE(
-      probe.leftJoinType,
-      joinType,
-      "Join type does not have right hash join variant");
 
   PlanStateSaver save(state, candidate);
 
@@ -1641,8 +1635,8 @@ void Optimization::addJoin(
   joinByHash(plan, candidate, state, toTry);
 
   if (!options_.syntacticJoinOrder && toTry.size() > sizeAfterIndex &&
-      candidate.join->hasRightHashVariant()) {
-    // There is a hash based candidate with a non-commutative join.
+      !candidate.join->isNonCommutative()) {
+    // There is a hash based candidate with a commutative join.
     // Try a right join variant.
     joinByHashRight(plan, candidate, state, toTry);
   }

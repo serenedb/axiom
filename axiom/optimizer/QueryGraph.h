@@ -624,14 +624,7 @@ class JoinEdge {
   /// True if all tables referenced from 'leftKeys' must be placed before
   /// placing this.
   bool isNonCommutative() const {
-    // Inner and full outer joins are commutative.
-    return !isInner() && !isFullOuter();
-  }
-
-  /// True if has a hash based variant that builds on the left and probes on the
-  /// right.
-  bool hasRightHashVariant() const {
-    return isNonCommutative() && !isAnti() && !isUnnest();
+    return isAnti() || isUnnest();
   }
 
   /// Returns the join side info for 'table'. If 'other' is set, returns the
