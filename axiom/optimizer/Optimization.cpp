@@ -160,9 +160,7 @@ void reducingJoinsRecursive(
     if (!state.dt->hasTable(other.table) || !state.dt->hasJoin(join)) {
       continue;
     }
-    if (other.table->isNot(PlanType::kTableNode) &&
-        other.table->isNot(PlanType::kValuesTableNode) &&
-        other.table->isNot(PlanType::kUnnestTableNode)) {
+    if (other.table->is(PlanType::kDerivedTableNode)) {
       continue;
     }
     if (visited.contains(other.table)) {
@@ -1083,6 +1081,13 @@ void Optimization::joinByIndex(
 
   auto [right, left] = candidate.joinSides();
 
+  const auto joinType = right.leftJoinType;
+  if (joinType == velox::core::JoinType::kFull ||
+      joinType == velox::core::JoinType::kRight) {
+    // Not available by index.
+    return;
+  }
+
   auto& keys = right.keys;
   auto keyColumns = leadingColumns(keys);
   if (keyColumns.empty()) {
@@ -1101,12 +1106,6 @@ void Optimization::joinByIndex(
       continue;
     }
     state.placed.add(candidate.tables.at(0));
-    auto joinType = right.leftJoinType();
-    if (joinType == velox::core::JoinType::kFull ||
-        joinType == velox::core::JoinType::kRight) {
-      // Not available by index.
-      return;
-    }
 
     auto fanout = info.scanCardinality * rightTable->filterSelectivity;
     if (joinType == velox::core::JoinType::kLeft) {
@@ -1191,6 +1190,8 @@ void Optimization::joinByHash(
 
   auto [build, probe] = candidate.joinSides();
 
+  auto joinType = build.leftJoinType;
+
   const auto partKeys = joinKeyPartition(plan, probe.keys);
   ExprVector copartition;
   if (partKeys.empty()) {
@@ -1257,7 +1258,8 @@ void Optimization::joinByHash(
         buildInput = repartition;
       }
     } else if (
-        candidate.join->isBroadcastableType() &&
+        joinType != velox::core::JoinType::kRight &&
+        joinType != velox::core::JoinType::kFull &&
         isBroadcastableSize(buildPlan)) {
       auto* broadcast = make<Repartition>(
           buildInput, Distribution::broadcast(), buildInput->columns());
@@ -1275,16 +1277,15 @@ void Optimization::joinByHash(
   auto buildKeys = precomputeBuild.toColumns(build.keys);
   buildInput = std::move(precomputeBuild).maybeProject();
 
-  auto* buildOp = make<HashBuild>(buildInput, build.keys, buildPlan);
-  buildState.addCost(*buildOp);
+  buildInput = make<HashBuild>(buildInput, build.keys);
+  buildState.addCost(*buildInput);
 
-  auto joinType = build.leftJoinType();
   const bool probeOnly = joinType == velox::core::JoinType::kLeftSemiFilter ||
       joinType == velox::core::JoinType::kLeftSemiProject ||
       joinType == velox::core::JoinType::kAnti;
 
   PlanObjectSet probeColumns;
-  probeColumns.unionObjects(plan->columns());
+  probeColumns.unionObjects(probeInput->columns());
 
   ColumnVector columns;
   PlanObjectSet columnSet;
@@ -1326,6 +1327,8 @@ void Optimization::joinByHash(
       candidate.join->rlFanout(),
       buildState.cost.cardinality / state.cost.cardinality);
 
+  state.cost.cost += buildState.cost.cost;
+
   PrecomputeProjection precomputeProbe(probeInput, state.dt);
   auto probeKeys = precomputeProbe.toColumns(probe.keys);
   probeInput = std::move(precomputeProbe).maybeProject();
@@ -1334,15 +1337,13 @@ void Optimization::joinByHash(
       JoinMethod::kHash,
       joinType,
       probeInput,
-      buildOp,
+      buildInput,
       std::move(probeKeys),
       std::move(buildKeys),
       candidate.join->filter(),
       fanout,
       std::move(columns));
-
   state.addCost(*join);
-  state.cost.cost += buildState.cost.cost;
 
   state.addNextJoin(&candidate, join, toTry);
 }
@@ -1355,6 +1356,9 @@ void Optimization::joinByHashRight(
   checkTables(candidate);
 
   auto [probe, build] = candidate.joinSides();
+
+  // Change the join type to the right join variant.
+  auto joinType = reverseJoinType(probe.leftJoinType);
 
   PlanStateSaver save(state, candidate);
 
@@ -1409,23 +1413,14 @@ void Optimization::joinByHashRight(
   auto buildKeys = precomputeBuild.toColumns(build.keys);
   buildInput = std::move(precomputeBuild).maybeProject();
 
-  auto* buildOp = make<HashBuild>(buildInput, build.keys, nullptr);
-  state.addCost(*buildOp);
+  buildInput = make<HashBuild>(buildInput, build.keys);
+  state.addCost(*buildInput);
+
+  const bool buildOnly = joinType == velox::core::JoinType::kRightSemiFilter ||
+      joinType == velox::core::JoinType::kRightSemiProject;
 
   PlanObjectSet buildColumns;
   buildColumns.unionObjects(buildInput->columns());
-
-  const auto leftJoinType = probe.leftJoinType();
-  // Change the join type to the right join variant.
-  auto rightJoinType = reverseJoinType(leftJoinType);
-
-  VELOX_CHECK(
-      leftJoinType != rightJoinType,
-      "Join type does not have right hash join variant");
-
-  const bool buildOnly =
-      rightJoinType == velox::core::JoinType::kRightSemiFilter ||
-      rightJoinType == velox::core::JoinType::kRightSemiProject;
 
   ColumnVector columns;
   PlanObjectSet columnSet;
@@ -1448,10 +1443,10 @@ void Optimization::joinByHashRight(
 
   if (mark) {
     setMarkTrueFraction(
-        mark, rightJoinType, candidate.join->rlFanout(), candidate.fanout);
+        mark, joinType, candidate.join->rlFanout(), candidate.fanout);
   }
 
-  tryOptimizeSemiProject(rightJoinType, mark, state, negation_);
+  tryOptimizeSemiProject(joinType, mark, state, negation_);
 
   // If there is an existence flag, it is the rightmost result column.
   if (mark) {
@@ -1459,15 +1454,15 @@ void Optimization::joinByHashRight(
     columns.push_back(mark);
   }
 
+  state.columns = columnSet;
+
   const auto fanout = fanoutJoinTypeLimit(
-      rightJoinType,
+      joinType,
       candidate.join->rlFanout(),
       candidate.fanout,
       state.cost.cardinality / probeState.cost.cardinality);
 
   const auto buildCost = state.cost;
-
-  state.columns = columnSet;
   state.cost = probeState.cost;
   state.cost.cost += buildCost.cost;
 
@@ -1477,9 +1472,9 @@ void Optimization::joinByHashRight(
 
   RelationOp* join = make<Join>(
       JoinMethod::kHash,
-      rightJoinType,
+      joinType,
       probeInput,
-      buildOp,
+      buildInput,
       std::move(probeKeys),
       std::move(buildKeys),
       candidate.join->filter(),
@@ -1546,7 +1541,7 @@ void Optimization::crossJoin(
       return Join::makeCrossJoin(plan, std::move(rightOp), std::move(columns));
     }
     const auto right = candidate.join->sideOf(candidate.tables[0], false);
-    const auto joinType = right.leftJoinType();
+    const auto joinType = right.leftJoinType;
     const bool inputOnly = joinType == velox::core::JoinType::kLeftSemiProject;
     ColumnCP mark = nullptr;
     state.downstreamColumns().forEach<Column>([&](auto column) {
@@ -1575,7 +1570,7 @@ void Optimization::crossJoin(
     return Join::makeNestedLoopJoin(
         plan,
         std::move(rightOp),
-        right.leftJoinType(),
+        right.leftJoinType,
         candidate.join->filter(),
         std::move(columns));
   }();
@@ -1656,9 +1651,9 @@ void Optimization::addJoin(
   joinByHash(plan, candidate, state, toTry);
 
   if (!options_.syntacticJoinOrder && toTry.size() > sizeAfterIndex &&
-      candidate.join->hasRightHashVariant()) {
-    // There is a hash based candidate with a non-commutative join. Try a right
-    // join variant.
+      !candidate.join->isNonCommutative()) {
+    // There is a hash based candidate with a commutative join.
+    // Try a right join variant.
     joinByHashRight(plan, candidate, state, toTry);
   }
 
