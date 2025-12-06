@@ -1275,7 +1275,7 @@ void Optimization::joinByHash(
   auto buildKeys = precomputeBuild.toColumns(build.keys);
   buildInput = std::move(precomputeBuild).maybeProject();
 
-  auto* buildOp = make<HashBuild>(buildInput, build.keys, buildPlan);
+  auto* buildOp = make<HashBuild>(buildInput, build.keys);
   buildState.addCost(*buildOp);
 
   auto joinType = build.leftJoinType();
@@ -1409,7 +1409,7 @@ void Optimization::joinByHashRight(
   auto buildKeys = precomputeBuild.toColumns(build.keys);
   buildInput = std::move(precomputeBuild).maybeProject();
 
-  auto* buildOp = make<HashBuild>(buildInput, build.keys, nullptr);
+  auto* buildOp = make<HashBuild>(buildInput, build.keys);
   state.addCost(*buildOp);
 
   PlanObjectSet buildColumns;
