@@ -1657,8 +1657,8 @@ void Optimization::addJoin(
 
   if (!options_.syntacticJoinOrder && toTry.size() > sizeAfterIndex &&
       candidate.join->hasRightHashVariant()) {
-    // There is a hash based candidate with a non-commutative join. Try a right
-    // join variant.
+    // There is a hash based candidate with a non-commutative join.
+    // Try a right join variant.
     joinByHashRight(plan, candidate, state, toTry);
   }
 
