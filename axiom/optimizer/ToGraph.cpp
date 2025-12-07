@@ -2122,7 +2122,7 @@ bool ToGraph::processSubqueriesImpl(
 
   for (const auto& expr : subqueries.inPredicates) {
     auto subqueryDt = translateSubquery(
-        *expr->inputAt(1)->as<lp::SubqueryExpr>()->subquery(), true);
+        *expr->inputAt(1)->as<lp::SubqueryExpr>()->subquery());
     VELOX_CHECK_EQ(1, subqueryDt->columns.size());
 
     auto leftKey = translateExpr(expr->inputAt(0));
@@ -2142,7 +2142,7 @@ bool ToGraph::processSubqueriesImpl(
 
   for (const auto& expr : subqueries.exists) {
     auto subqueryDt = translateSubquery(
-        *expr->inputAt(0)->as<lp::SubqueryExpr>()->subquery(), true);
+        *expr->inputAt(0)->as<lp::SubqueryExpr>()->subquery());
 
     auto* existsEdge = buildCorrelatedConjuctExistsJoinEdge(prevDt, subqueryDt);
     if (!existsEdge) {
