@@ -1196,8 +1196,7 @@ ExprCP ToGraph::translateColumn(std::string_view name) const {
   }
 
   if (allowCorrelations_ && correlations_ != nullptr) {
-    if (auto it = correlations_->find(name);
-        it != correlations_->end()) {
+    if (auto it = correlations_->find(name); it != correlations_->end()) {
       return it->second;
     }
   }
@@ -2131,7 +2130,6 @@ bool ToGraph::processSubqueriesImpl(
     auto* existsEdge =
         buildCorrelatedConjuctExistsJoinEdge(leftTable, subqueryDt);
     if (!existsEdge) {
-      
       VELOX_CHECK(correlatedConjuncts_.empty());
       return false;
     }
