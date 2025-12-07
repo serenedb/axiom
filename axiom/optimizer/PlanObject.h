@@ -137,8 +137,8 @@ class PlanObject {
   }
 
  private:
-  const PlanType type_;
-  const int32_t id_;
+  PlanType type_;
+  int32_t id_;
 };
 
 using PlanObjectP = PlanObject*;

@@ -75,6 +75,29 @@ struct PlanSet {
   /// nothing more expensive than this should be tried.
   float bestCostWithShuffle{std::numeric_limits<float>::infinity()};
 
+  PlanSet() = default;
+
+  /// Copy constructor - deep copies all plans
+  PlanSet(const PlanSet& other) : bestCostWithShuffle(other.bestCostWithShuffle) {
+    plans.reserve(other.plans.size());
+    for (const auto& plan : other.plans) {
+      plans.push_back(std::make_unique<Plan>(*plan));
+    }
+  }
+
+  /// Copy assignment operator - deep copies all plans
+  PlanSet& operator=(const PlanSet& other) {
+    if (this != &other) {
+      bestCostWithShuffle = other.bestCostWithShuffle;
+      plans.clear();
+      plans.reserve(other.plans.size());
+      for (const auto& plan : other.plans) {
+        plans.push_back(std::make_unique<Plan>(*plan));
+      }
+    }
+    return *this;
+  }
+
   /// Returns the best plan that produces 'desired' distribution.
   /// If the best plan has some other distribution, sets 'needsShuffle' to true.
   PlanP best(const Distribution& desired, bool& needsShuffle);

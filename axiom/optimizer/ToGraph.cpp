@@ -126,7 +126,7 @@ void ToGraph::addDtColumn(DerivedTableP dt, std::string_view name) {
     outer = make<Column>(columnName, dt, inner->value(), columnName);
   }
   dt->columns.push_back(outer);
-  renames_[name] = outer;
+  renames_[std::string{name}] = outer;
 }
 
 namespace {
@@ -1191,12 +1191,13 @@ ExprCP ToGraph::translateColumn(std::string_view name) const {
   if (auto it = lambdaSignature_.find(name); it != lambdaSignature_.end()) {
     return it->second;
   }
-  if (auto it = renames_.find(name); it != renames_.end()) {
+  if (auto it = renames_.find(std::string{name}); it != renames_.end()) {
     return it->second;
   }
 
   if (allowCorrelations_ && correlations_ != nullptr) {
-    if (auto it = correlations_->find(name); it != correlations_->end()) {
+    if (auto it = correlations_->find(std::string{name});
+        it != correlations_->end()) {
       return it->second;
     }
   }
@@ -1871,16 +1872,6 @@ void ToGraph::makeValuesTable(const lp::ValuesNode& values) {
 
 namespace {
 
-struct Subqueries {
-  std::vector<lp::SubqueryExprPtr> scalars;
-  std::vector<lp::ExprPtr> inPredicates;
-  std::vector<lp::ExprPtr> exists;
-
-  bool empty() const {
-    return scalars.empty() && inPredicates.empty() && exists.empty();
-  }
-};
-
 void extractSubqueries(const lp::ExprPtr& expr, Subqueries& subqueries) {
   if (expr->isSubquery()) {
     subqueries.scalars.push_back(
@@ -1958,9 +1949,9 @@ void ToGraph::addProjection(const lp::ProjectNode& project) {
 }
 
 DerivedTableP ToGraph::translateSubquery(
-    const logical_plan::LogicalPlanNode& node) {
-  auto originalRenames = std::move(renames_);
-  renames_.clear();
+    const logical_plan::LogicalPlanNode& node,
+    bool filterSubquery) {
+  auto originalRenames = renames_;
 
   correlations_ = &originalRenames;
   SCOPE_EXIT {
@@ -1991,15 +1982,69 @@ ColumnCP ToGraph::addMarkColumn() {
   return markColumn;
 }
 
-void ToGraph::processSubqueries(const logical_plan::FilterNode& filter) {
-  Subqueries subqueries;
-  extractSubqueries(filter.predicate(), subqueries);
+JoinEdgeP ToGraph::buildCorrelatedConjuctExistsJoinEdge(
+    PlanObjectCP prevDt,
+    DerivedTableP subqueryDt) {
+  ExprVector leftKeys;
+  ExprVector rightKeys;
+  ExprVector filter;
+  PlanObjectCP leftTable = prevDt;
+  for (const auto& correlatedConjuct : correlatedConjuncts_) {
+    const auto* conjunct = subqueryDt->exportExpr(correlatedConjuct);
 
-  if (currentDt_->hasLimit() ||
-      (currentDt_->hasAggregation() && !subqueries.empty())) {
-    finalizeDt(*filter.onlyInput());
+    auto tables = conjunct->allTables();
+    tables.erase(subqueryDt);
+    if (tables.empty()) {
+      filter.push_back(conjunct);
+      continue;
+    }
+
+    if (tables.size() > 1) {
+      correlatedConjuncts_.clear();
+      return nullptr; // we want to finalize dt it and try again
+    }
+
+    if (leftTable == nullptr) {
+      leftTable = tables.onlyObject();
+    } else {
+      VELOX_CHECK(leftTable == tables.onlyObject());
+    }
+
+    ExprCP left = nullptr;
+    ExprCP right = nullptr;
+    if (isJoinEquality(conjunct, leftTable, subqueryDt, left, right)) {
+      leftKeys.push_back(left);
+      rightKeys.push_back(right);
+    } else {
+      filter.push_back(conjunct);
+    }
   }
 
+  if (!prevDt && correlatedConjuncts_.empty()) {
+    VELOX_CHECK(!leftTable);
+    correlatedConjuncts_.clear();
+    return nullptr;
+  }
+
+  correlatedConjuncts_.clear();
+
+  // Add a join edge and replace 'expr' with 'mark' column in the join output.
+  const auto* markColumn = addMarkColumn();
+
+  auto* existsEdge = JoinEdge::makeExists(
+      leftTable, subqueryDt, markColumn, std::move(filter));
+
+  for (auto i = 0; i < leftKeys.size(); ++i) {
+    existsEdge->addEquality(leftKeys[i], rightKeys[i]);
+  }
+
+  return existsEdge;
+}
+
+bool ToGraph::processSubqueriesImpl(
+    DerivedTableP prevDt,
+    const Subqueries& subqueries,
+    const logical_plan::FilterNode& filterNode) {
   for (const auto& subquery : subqueries.scalars) {
     auto subqueryDt = translateSubquery(*subquery->subquery());
 
@@ -2078,73 +2123,75 @@ void ToGraph::processSubqueries(const logical_plan::FilterNode& filter) {
 
   for (const auto& expr : subqueries.inPredicates) {
     auto subqueryDt = translateSubquery(
-        *expr->inputAt(1)->as<lp::SubqueryExpr>()->subquery());
+        *expr->inputAt(1)->as<lp::SubqueryExpr>()->subquery(), true);
     VELOX_CHECK_EQ(1, subqueryDt->columns.size());
-    VELOX_CHECK(correlatedConjuncts_.empty());
-
-    // Add a join edge and replace 'expr' with 'mark' column in the join output.
-    const auto* markColumn = addMarkColumn();
 
     auto leftKey = translateExpr(expr->inputAt(0));
     auto leftTable = leftKey->singleTable();
-    VELOX_CHECK_NOT_NULL(
-        leftTable,
-        "<expr> IN <subquery> with multi-table <expr> is not supported yet");
+    auto* existsEdge =
+        buildCorrelatedConjuctExistsJoinEdge(leftTable, subqueryDt);
+    if (!existsEdge) {
+      
+      VELOX_CHECK(correlatedConjuncts_.empty());
+      return false;
+    }
 
-    auto* edge = JoinEdge::makeExists(leftTable, subqueryDt, markColumn);
+    existsEdge->addEquality(leftKey, subqueryDt->columns.front());
 
-    currentDt_->joins.push_back(edge);
-    edge->addEquality(leftKey, subqueryDt->columns.front());
-
-    subqueries_.emplace(expr, markColumn);
+    currentDt_->joins.push_back(existsEdge);
+    subqueries_.emplace(expr, existsEdge->markColumn());
   }
 
   for (const auto& expr : subqueries.exists) {
     auto subqueryDt = translateSubquery(
-        *expr->inputAt(0)->as<lp::SubqueryExpr>()->subquery());
-    VELOX_CHECK(!correlatedConjuncts_.empty());
+        *expr->inputAt(0)->as<lp::SubqueryExpr>()->subquery(), true);
 
-    PlanObjectCP leftTable = nullptr;
-    ExprVector leftKeys;
-    ExprVector rightKeys;
-    ExprVector filter;
-    for (auto i = 0; i < correlatedConjuncts_.size(); ++i) {
-      const auto* conjunct = subqueryDt->exportExpr(correlatedConjuncts_[i]);
-
-      auto tables = conjunct->allTables();
-      tables.erase(subqueryDt);
-
-      VELOX_CHECK_EQ(1, tables.size());
-      if (leftTable == nullptr) {
-        leftTable = tables.onlyObject();
-      } else {
-        VELOX_CHECK(leftTable == tables.onlyObject());
-      }
-
-      ExprCP left = nullptr;
-      ExprCP right = nullptr;
-      if (isJoinEquality(conjunct, leftTable, subqueryDt, left, right)) {
-        leftKeys.push_back(left);
-        rightKeys.push_back(right);
-      } else {
-        filter.push_back(conjunct);
-      }
+    auto* existsEdge = buildCorrelatedConjuctExistsJoinEdge(prevDt, subqueryDt);
+    if (!existsEdge) {
+      // supposed to be cleared by buildCorrelatedConjuctExistsJoinEdge
+      VELOX_CHECK(correlatedConjuncts_.empty());
+      return false;
     }
 
-    correlatedConjuncts_.clear();
-
-    const auto* markColumn = addMarkColumn();
-
-    auto* existsEdge = JoinEdge::makeExists(
-        leftTable, subqueryDt, markColumn, std::move(filter));
     currentDt_->joins.push_back(existsEdge);
-
-    for (auto i = 0; i < leftKeys.size(); ++i) {
-      existsEdge->addEquality(leftKeys[i], rightKeys[i]);
-    }
-
-    subqueries_.emplace(expr, markColumn);
+    subqueries_.emplace(expr, existsEdge->markColumn());
   }
+
+  return true;
+}
+
+void ToGraph::processSubqueries(const logical_plan::FilterNode& filter) {
+  Subqueries subqueries;
+  extractSubqueries(filter.predicate(), subqueries);
+
+  if (currentDt_->hasLimit()) {
+    finalizeDt(*filter.onlyInput());
+  }
+
+  if (subqueries.empty()) {
+    return;
+  }
+
+  if (currentDt_->hasAggregation()) {
+    finalizeDt(*filter.onlyInput());
+  }
+
+  auto& memo = queryCtx()->optimization()->memo();
+
+  auto savedMemo = memo;
+  auto savedState = *currentDt_;
+  if (auto success = processSubqueriesImpl(nullptr, subqueries, filter)) {
+    return;
+  }
+
+  memo = std::move(savedMemo);
+  *currentDt_ = std::move(savedState);
+
+  auto prevDt = currentDt_;
+  finalizeDt(*filter.onlyInput());
+
+  bool success = processSubqueriesImpl(prevDt, subqueries, filter);
+  VELOX_CHECK(success, "These kind of subqueries are not supported");
 }
 
 void ToGraph::addFilter(const lp::FilterNode& filter) {

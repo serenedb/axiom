@@ -24,6 +24,16 @@
 
 namespace facebook::axiom::optimizer {
 
+struct Subqueries {
+  std::vector<logical_plan::SubqueryExprPtr> scalars;
+  std::vector<logical_plan::ExprPtr> inPredicates;
+  std::vector<logical_plan::ExprPtr> exists;
+
+  bool empty() const {
+    return scalars.empty() && inPredicates.empty() && exists.empty();
+  }
+};
+
 struct ExprDedupKey {
   Name func;
   std::span<const ExprCP> args;
@@ -337,7 +347,18 @@ class ToGraph {
   // column produced by the DT.
   void processSubqueries(const logical_plan::FilterNode& filter);
 
-  DerivedTableP translateSubquery(const logical_plan::LogicalPlanNode& node);
+  JoinEdgeP buildCorrelatedConjuctExistsJoinEdge(
+      PlanObjectCP prevDt,
+      DerivedTableP subqueryDt);
+
+  bool processSubqueriesImpl(
+      DerivedTableP prevDt,
+      const Subqueries& subqueries,
+      const logical_plan::FilterNode& filter);
+
+  DerivedTableP translateSubquery(
+      const logical_plan::LogicalPlanNode& node,
+      bool filterSubquery = false);
 
   ColumnCP addMarkColumn();
 
@@ -361,10 +382,10 @@ class ToGraph {
   folly::F14FastMap<std::string_view, ColumnCP> lambdaSignature_;
 
   // Maps names in project nodes of input logical plan to deduplicated Exprs.
-  folly::F14FastMap<std::string, ExprCP> renames_;
+  std::unordered_map<std::string, ExprCP> renames_;
 
   // Symbols from the 'outer' query. Used when processing correlated subqueries.
-  const folly::F14FastMap<std::string, ExprCP>* correlations_{nullptr};
+  const std::unordered_map<std::string, ExprCP>* correlations_{nullptr};
 
   // True if expression is allowed to reference symbols from the 'outer' query.
   bool allowCorrelations_{false};

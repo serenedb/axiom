@@ -577,7 +577,6 @@ void SubfieldTracker::markControl(
         std::array{filter->predicate()},
         /*isControl=*/true,
         context);
-
   } else if (kind == lp::NodeKind::kTableWrite) {
     const auto& write = *node.as<lp::TableWriteNode>();
     // All columns are needed for write, but they are all not control columns.
