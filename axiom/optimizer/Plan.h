@@ -77,7 +77,8 @@ struct PlanSet {
 
   PlanSet() = default;
 
-  PlanSet(const PlanSet& other) : bestCostWithShuffle(other.bestCostWithShuffle) {
+  PlanSet(const PlanSet& other)
+      : bestCostWithShuffle(other.bestCostWithShuffle) {
     plans.reserve(other.plans.size());
     for (const auto& plan : other.plans) {
       plans.push_back(std::make_unique<Plan>(*plan));
@@ -85,14 +86,17 @@ struct PlanSet {
   }
 
   PlanSet& operator=(const PlanSet& other) {
-    if (this != &other) {
-      bestCostWithShuffle = other.bestCostWithShuffle;
-      plans.clear();
-      plans.reserve(other.plans.size());
-      for (const auto& plan : other.plans) {
-        plans.push_back(std::make_unique<Plan>(*plan));
-      }
+    if (this == &other) {
+      return *this;
     }
+
+    bestCostWithShuffle = other.bestCostWithShuffle;
+    plans.clear();
+    plans.reserve(other.plans.size());
+    for (const auto& plan : other.plans) {
+      plans.push_back(std::make_unique<Plan>(*plan));
+    }
+    
     return *this;
   }
 
