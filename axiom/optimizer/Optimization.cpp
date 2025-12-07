@@ -119,8 +119,6 @@ PlanP Optimization::bestPlan() {
   topState_.dt = root_;
   topState_.setTargetExprsForDt(targetColumns);
 
-  std::cerr << DerivedTablePrinter::toText(*root_) << std::endl;
-
   makeJoins(topState_);
 
   return topState_.plans.best();

@@ -77,7 +77,6 @@ struct PlanSet {
 
   PlanSet() = default;
 
-  /// Copy constructor - deep copies all plans
   PlanSet(const PlanSet& other) : bestCostWithShuffle(other.bestCostWithShuffle) {
     plans.reserve(other.plans.size());
     for (const auto& plan : other.plans) {
@@ -85,7 +84,6 @@ struct PlanSet {
     }
   }
 
-  /// Copy assignment operator - deep copies all plans
   PlanSet& operator=(const PlanSet& other) {
     if (this != &other) {
       bestCostWithShuffle = other.bestCostWithShuffle;

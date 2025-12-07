@@ -19,8 +19,6 @@
 #include "axiom/optimizer/Optimization.h"
 #include "axiom/optimizer/RelationOpPrinter.h"
 
-#include <iostream>
-
 namespace facebook::axiom::optimizer {
 
 namespace {
@@ -384,7 +382,6 @@ PlanP PlanSet::best(const Distribution& desired, bool& needsShuffle) {
   const bool single = isSingleWorker();
 
   for (const auto& plan : plans) {
-    std::cerr << RelationOpPrinter::toText(*plan->op) << "\n";
     const float cost = plan->cost.cost;
 
     auto update = [&](PlanP& current, float& currentCost) {
