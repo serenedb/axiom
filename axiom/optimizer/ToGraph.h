@@ -356,9 +356,7 @@ class ToGraph {
       const Subqueries& subqueries,
       const logical_plan::FilterNode& filter);
 
-  DerivedTableP translateSubquery(
-      const logical_plan::LogicalPlanNode& node,
-      bool filterSubquery = false);
+  DerivedTableP translateSubquery(const logical_plan::LogicalPlanNode& node);
 
   ColumnCP addMarkColumn();
 
