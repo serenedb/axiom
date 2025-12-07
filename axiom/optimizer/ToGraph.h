@@ -382,10 +382,10 @@ class ToGraph {
   folly::F14FastMap<std::string_view, ColumnCP> lambdaSignature_;
 
   // Maps names in project nodes of input logical plan to deduplicated Exprs.
-  std::unordered_map<std::string, ExprCP> renames_;
+  folly::F14FastMap<std::string, ExprCP> renames_;
 
   // Symbols from the 'outer' query. Used when processing correlated subqueries.
-  const std::unordered_map<std::string, ExprCP>* correlations_{nullptr};
+  const folly::F14FastMap<std::string, ExprCP>* correlations_{nullptr};
 
   // True if expression is allowed to reference symbols from the 'outer' query.
   bool allowCorrelations_{false};

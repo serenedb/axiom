@@ -126,7 +126,7 @@ void ToGraph::addDtColumn(DerivedTableP dt, std::string_view name) {
     outer = make<Column>(columnName, dt, inner->value(), columnName);
   }
   dt->columns.push_back(outer);
-  renames_[std::string{name}] = outer;
+  renames_[name] = outer;
 }
 
 namespace {

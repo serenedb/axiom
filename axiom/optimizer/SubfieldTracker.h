@@ -147,9 +147,6 @@ class SubfieldTracker {
 
   PlanSubfields controlSubfields_;
   PlanSubfields payloadSubfields_;
-
-  bool insideFilter_{false};
-  bool insideSubquery_{false};
 };
 
 } // namespace facebook::axiom::optimizer
