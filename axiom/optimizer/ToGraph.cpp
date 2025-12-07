@@ -1191,12 +1191,12 @@ ExprCP ToGraph::translateColumn(std::string_view name) const {
   if (auto it = lambdaSignature_.find(name); it != lambdaSignature_.end()) {
     return it->second;
   }
-  if (auto it = renames_.find(std::string{name}); it != renames_.end()) {
+  if (auto it = renames_.find(name); it != renames_.end()) {
     return it->second;
   }
 
   if (allowCorrelations_ && correlations_ != nullptr) {
-    if (auto it = correlations_->find(std::string{name});
+    if (auto it = correlations_->find(name);
         it != correlations_->end()) {
       return it->second;
     }
