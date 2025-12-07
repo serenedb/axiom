@@ -1949,7 +1949,8 @@ void ToGraph::addProjection(const lp::ProjectNode& project) {
 
 DerivedTableP ToGraph::translateSubquery(
     const logical_plan::LogicalPlanNode& node) {
-  auto originalRenames = renames_;
+  auto originalRenames = std::move(renames_);
+  renames_.clear();
 
   correlations_ = &originalRenames;
   SCOPE_EXIT {
