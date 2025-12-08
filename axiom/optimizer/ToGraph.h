@@ -331,7 +331,7 @@ class ToGraph {
       const std::vector<logical_plan::SortingField>& ordering,
       folly::F14FastSet<ExprCP> keysToIgnore = {});
 
-  struct MakeArgs {
+  struct AddJoinArgs {
     PlanObjectCP leftTable;
     const ExprVector& leftKeys;
     const ExprVector& rightKeys;
@@ -341,7 +341,7 @@ class ToGraph {
   ExprCP processSubquery(
       PlanObjectCP leftTable,
       DerivedTableCP subqueryDt,
-      const std::function<ExprCP(MakeArgs)>& addJoin);
+      const std::function<ExprCP(AddJoinArgs)>& addJoin);
 
   ExprCP processScalarSubquery(
       const logical_plan::SubqueryExpr& subquery,
