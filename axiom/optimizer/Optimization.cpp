@@ -460,8 +460,7 @@ RelationOpPtr repartitionForAgg(
   // If no grouping and not yet gathered on a single node,
   // add a gather before final agg.
   if (agg->groupingKeys().empty()) {
-    auto* gather =
-        make<Repartition>(plan, Distribution::gather(), plan->columns());
+    auto* gather = make<Repartition>(plan, Distribution::gather());
     cost.add(*gather);
     return gather;
   }
@@ -487,8 +486,7 @@ RelationOpPtr repartitionForAgg(
 
   Distribution distribution{
       plan->distribution().distributionType, std::move(keyValues)};
-  auto* repartition =
-      make<Repartition>(plan, std::move(distribution), plan->columns());
+  auto* repartition = make<Repartition>(plan, std::move(distribution));
   cost.add(*repartition);
   return repartition;
 }
@@ -573,9 +571,7 @@ RelationOpPtr repartitionForIndex(
   }
 
   auto* repartition = make<Repartition>(
-      plan,
-      Distribution{distribution.distributionType, std::move(keyExprs)},
-      plan->columns());
+      plan, Distribution{distribution.distributionType, std::move(keyExprs)});
   state.addCost(*repartition);
   return repartition;
 }
@@ -686,7 +682,7 @@ void alignJoinSides(
   if (part.empty()) {
     Distribution distribution{
         otherInput->distribution().distributionType, keys};
-    input = make<Repartition>(input, std::move(distribution), input->columns());
+    input = make<Repartition>(input, std::move(distribution));
     state.addCost(*input);
   }
 
@@ -703,8 +699,7 @@ void alignJoinSides(
 
   Distribution distribution{
       input->distribution().distributionType, std::move(distColumns)};
-  otherInput = make<Repartition>(
-      otherInput, std::move(distribution), otherInput->columns());
+  otherInput = make<Repartition>(otherInput, std::move(distribution));
   otherState.addCost(*otherInput);
 }
 
@@ -782,8 +777,7 @@ RelationOpPtr repartitionForWrite(const RelationOpPtr& plan, PlanState& state) {
   }
 
   Distribution distribution(layout->partitionType(), std::move(keyValues));
-  auto* repartition =
-      make<Repartition>(plan, std::move(distribution), plan->columns());
+  auto* repartition = make<Repartition>(plan, std::move(distribution));
   state.addCost(*repartition);
   return repartition;
 }
@@ -1259,16 +1253,14 @@ void Optimization::joinByHash(
         }
         Distribution distribution{
             probeInput->distribution().distributionType, copartition};
-        buildInput = make<Repartition>(
-            buildInput, std::move(distribution), buildInput->columns());
+        buildInput = make<Repartition>(buildInput, std::move(distribution));
         buildState.addCost(*buildInput);
       }
     } else if (
         joinType != velox::core::JoinType::kRight &&
         joinType != velox::core::JoinType::kFull &&
         isSingleWorkerSize(*buildInput)) {
-      buildInput = make<Repartition>(
-          buildInput, Distribution::broadcast(), buildInput->columns());
+      buildInput = make<Repartition>(buildInput, Distribution::broadcast());
       buildState.addCost(*buildInput);
     } else {
       // The probe gets shuffled to align with build. If build is not
@@ -1525,8 +1517,7 @@ void Optimization::crossJoin(
   RelationOpPtr buildInput = buildPlan->op;
   PlanState buildState(state.optimization, state.dt, buildPlan);
   if (needsShuffle) {
-    buildInput =
-        make<Repartition>(buildInput, broadcast, buildInput->columns());
+    buildInput = make<Repartition>(buildInput, broadcast);
     buildState.addCost(*buildInput);
   }
 
@@ -2055,8 +2046,7 @@ PlanP Optimization::makeUnionPlan(
       // Pick some partitioning key and shuffle on that and make distinct.
       Distribution someDistribution = somePartition(inputs);
       for (auto i = 0; i < inputs.size(); ++i) {
-        inputs[i] = make<Repartition>(
-            inputs[i], someDistribution, inputs[i]->columns());
+        inputs[i] = make<Repartition>(inputs[i], someDistribution);
         inputStates[i].addCost(*inputs[i]);
       }
     }
@@ -2065,8 +2055,7 @@ PlanP Optimization::makeUnionPlan(
     // return with no shuffle needed.
     for (auto i = 0; i < inputs.size(); ++i) {
       if (inputNeedsShuffle[i]) {
-        inputs[i] =
-            make<Repartition>(inputs[i], distribution, inputs[i]->columns());
+        inputs[i] = make<Repartition>(inputs[i], distribution);
         inputStates[i].addCost(*inputs[i]);
       }
     }
