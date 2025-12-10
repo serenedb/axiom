@@ -1305,8 +1305,8 @@ struct AggregateDedupKey {
   Name func;
   bool isDistinct;
   ExprCP condition;
-  std::span<const ExprCP> args;
-  std::span<const ExprCP> orderKeys;
+  CPSpan<Expr> args;
+  CPSpan<Expr> orderKeys;
   std::span<const OrderType> orderTypes;
 
   bool operator==(const AggregateDedupKey& other) const {
