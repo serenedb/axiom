@@ -1075,6 +1075,9 @@ void Optimization::joinByIndex(
     const JoinCandidate& candidate,
     PlanState& state,
     std::vector<NextJoin>& toTry) {
+  if (!options_.enableIndexLookupJoin) {
+    return;
+  }
   if (candidate.tables.size() != 1 ||
       candidate.tables[0]->isNot(PlanType::kTableNode) ||
       !candidate.existences.empty()) {
