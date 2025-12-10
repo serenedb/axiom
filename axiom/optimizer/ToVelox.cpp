@@ -1193,6 +1193,21 @@ velox::core::PlanNodePtr ToVelox::makeJoin(
   auto leftKeys = toFieldRefs(join.leftKeys);
   auto rightKeys = toFieldRefs(join.rightKeys);
 
+  if (join.method == JoinMethod::kMerge) {
+    auto joinNode = std::make_shared<velox::core::MergeJoinNode>(
+        nextId(),
+        join.joinType,
+        leftKeys,
+        rightKeys,
+        toAnd(join.filter),
+        left,
+        right,
+        makeOutputType(join.columns()));
+
+    makePredictionAndHistory(joinNode->id(), &join);
+    return joinNode;
+  }
+
   auto joinNode = std::make_shared<velox::core::HashJoinNode>(
       nextId(),
       join.joinType,
