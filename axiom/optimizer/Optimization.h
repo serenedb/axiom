@@ -254,7 +254,7 @@ class Optimization {
   // table and independently joined dimensions. These can be ordered
   // based on partitioning and size and we do not need to evaluate
   // their different permutations.
-  void tryNextJoins(PlanState& state, const std::vector<NextJoin>& nextJoins);
+  void tryNextJoins(PlanState& state, std::vector<NextJoin>& nextJoins);
 
   // Adds the join represented by 'candidate' on top of 'plan'. Tries index and
   // hash based methods and adds the index and hash based plans to 'result'. If
