@@ -1731,13 +1731,13 @@ void Optimization::addJoin(
 
 void Optimization::tryNextJoins(
     PlanState& state,
-    const std::vector<NextJoin>& nextJoins) {
+    std::vector<NextJoin>& nextJoins) {
   for (auto& next : nextJoins) {
     PlanStateSaver save(state);
-    state.placed = next.placed;
-    state.columns = next.columns;
+    state.placed = std::move(next.placed);
+    state.columns = std::move(next.columns);
     state.cost = next.cost;
-    makeJoins(next.plan, state);
+    makeJoins(std::move(next.plan), state);
   }
 }
 
@@ -1960,9 +1960,8 @@ void Optimization::makeJoins(PlanState& state) {
       auto table = from->as<BaseTable>();
       auto indices = table->chooseLeafIndex();
       // Make plan starting with each relevant index of the table.
-      const auto downstream = state.downstreamColumns();
       for (auto index : indices) {
-        auto columns = indexColumns(downstream, table, index);
+        auto columns = indexColumns(state.downstreamColumns(), table, index);
 
         PlanStateSaver save(state);
         state.placed.add(table);
