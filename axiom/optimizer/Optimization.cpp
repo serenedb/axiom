@@ -1100,7 +1100,7 @@ void Optimization::joinByIndex(
     if (info.lookupKeys.empty()) {
       continue;
     }
-    PlanStateSaver save(state, candidate);
+    PlanStateSaver save{state};
     auto newPartition = repartitionForIndex(info, left.keys, plan, state);
     if (!newPartition) {
       continue;
@@ -1242,7 +1242,7 @@ void Optimization::tryMergeJoin(
   std::erase(newProbeKeys, nullptr);
   std::erase(newBuildKeys, nullptr);
 
-  PlanStateSaver save{state, candidate};
+  PlanStateSaver save{state};
   RelationOp* join = make<Join>(
       JoinMethod::kMerge,
       joinType,
@@ -1394,7 +1394,7 @@ void Optimization::probeJoin(
     buildTables.add(buildTable);
   }
 
-  PlanStateSaver save(state, candidate);
+  PlanStateSaver save{state};
 
   // The build side dt does not need to produce columns that it uses
   // internally, only the columns that are downstream if we consider
@@ -1486,7 +1486,7 @@ void Optimization::buildJoin(
     probeTables.add(probeTable);
   }
 
-  PlanStateSaver save(state, candidate);
+  PlanStateSaver save{state};
 
   // The probe side dt does not need to produce columns that it uses
   // internally, only the columns that are downstream if we consider
@@ -1950,12 +1950,6 @@ void Optimization::makeJoins(PlanState& state) {
     firstTables.push_back(queryCtx()->objectAt(firstTableId));
   } else {
     firstTables = state.dt->startTables.toObjects();
-
-#ifndef NDEBUG
-    for (auto table : firstTables) {
-      state.debugSetFirstTable(table->id());
-    }
-#endif
   }
 
   auto sortedIndices = sortByStartingScore(firstTables);

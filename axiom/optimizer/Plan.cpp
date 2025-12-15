@@ -45,53 +45,6 @@ PlanState::PlanState(Optimization& optimization, DerivedTableCP dt, PlanP plan)
       std::max<float>(1, cost.cardinality), plan->op->resultCardinality());
 }
 
-#ifndef NDEBUG
-// NOLINTBEGIN
-// The dt for which we set a breakpoint for plan candidate.
-int32_t debugDt{-1};
-
-// Number of tables in 'debugPlacedTables'
-int32_t debugNumPlaced = 0;
-
-// Tables for setting a breakpoint. Join order selection calls planBreakpoint()
-// right before evaluating the cost for the tables in 'debugPlacedTables'.
-int32_t debugPlaced[10];
-
-void planBreakpoint() {
-  // Set breakpoint here for looking at cost of join order in
-  // 'debugPlacedTables'.
-  LOG(INFO) << "Join order breakpoint";
-}
-
-void PlanState::debugSetFirstTable(int32_t id) {
-  if (dt->id() == debugDt) {
-    debugPlacedTables.resize(1);
-    debugPlacedTables[0] = id;
-  }
-}
-// NOLINTEND
-#endif
-
-PlanStateSaver::PlanStateSaver(PlanState& state, const JoinCandidate& candidate)
-    : PlanStateSaver(state) {
-#ifndef NDEBUG
-  if (state.dt->id() != debugDt) {
-    return;
-  }
-  state.debugPlacedTables.push_back(candidate.tables[0]->id());
-  if (debugNumPlaced == 0) {
-    return;
-  }
-
-  for (auto i = 0; i < debugNumPlaced; ++i) {
-    if (debugPlaced[i] != state.debugPlacedTables[i]) {
-      return;
-    }
-  }
-  planBreakpoint();
-#endif
-}
-
 namespace {
 PlanObjectSet exprColumns(const PlanObjectSet& exprs) {
   PlanObjectSet columns;
