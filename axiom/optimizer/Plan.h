@@ -199,10 +199,6 @@ struct PlanState {
   /// example, best by cost and maybe plans with interesting orders.
   PlanSet plans;
 
-  /// Ordered set of tables placed so far. Used for setting a
-  /// breakpoint before a specific join order gets costed.
-  std::vector<int32_t> debugPlacedTables;
-
   /// Updates 'cost' to reflect 'op' being placed on top of the partial plan.
   void addCost(RelationOp& op) {
     cost.add(op);
@@ -277,16 +273,12 @@ struct PlanStateSaver {
       : state_(state),
         placed_(state.placed),
         columns_(state.columns),
-        cost_(state.cost),
-        numPlaced_(state.debugPlacedTables.size()) {}
-
-  PlanStateSaver(PlanState& state, const JoinCandidate& candidate);
+        cost_(state.cost) {}
 
   ~PlanStateSaver() {
     state_.placed = std::move(placed_);
     state_.columns = std::move(columns_);
     state_.cost = cost_;
-    state_.debugPlacedTables.resize(numPlaced_);
   }
 
  private:
@@ -294,7 +286,6 @@ struct PlanStateSaver {
   PlanObjectSet placed_;
   PlanObjectSet columns_;
   const PlanCost cost_;
-  const uint32_t numPlaced_;
 };
 
 /// Key for collection of memoized partial plans. Any table or derived
