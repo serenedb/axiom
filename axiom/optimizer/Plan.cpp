@@ -74,16 +74,12 @@ bool PlanState::mayConsiderNext(PlanObjectCP table) const {
   if (!syntacticJoinOrder_) {
     return true;
   }
-
-  const auto id = table->id();
-  auto it = std::find(dt->joinOrder.begin(), dt->joinOrder.end(), id);
-  if (it == dt->joinOrder.end()) {
-    return true;
-  }
-
-  const auto end = it - dt->joinOrder.begin();
-  for (auto i = 0; i < end; ++i) {
-    if (!placed.BitSet::contains(dt->joinOrder[i])) {
+  const auto tableId = table->id();
+  for (const auto id : dt->joinOrder) {
+    if (id == tableId) {
+      return true;
+    }
+    if (!placed.BitSet::contains(id)) {
       return false;
     }
   }
