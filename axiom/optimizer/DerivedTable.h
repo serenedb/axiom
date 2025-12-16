@@ -117,7 +117,7 @@ struct DerivedTable : public PlanObject {
   /// A list of PlanObject IDs for 'tables' in the order of appearance in the
   /// query. Used to produce syntactic join order if requested. Table with id
   /// joinOrder[i] can only be placed after tables before it are placed.
-  std::vector<int32_t, QGAllocator<int32_t>> joinOrder;
+  QGVector<int32_t> joinOrder;
 
   /// Postprocessing clauses: group by, having, order by, limit, offset.
 
