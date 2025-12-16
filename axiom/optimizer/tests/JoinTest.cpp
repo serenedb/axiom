@@ -54,6 +54,11 @@ struct JoinOptions {
 };
 
 constexpr size_t kNumTables = 201;
+#ifdef NDEBUG
+constexpr bool kIsDebug = false;
+#else
+constexpr bool kIsDebug = true;
+#endif
 
 // TODO Move this test into its own file.
 TEST_F(JoinTest, perfJoinChain) {
@@ -80,12 +85,12 @@ TEST_F(JoinTest, perfJoinChain) {
       },
       // no sampling but with join enumeration (no reducing existences)
       JoinOptions{
-          .num_joins = 18,
+          .num_joins = 18 - 4 * kIsDebug,
           .reducingExistences = false,
       },
       // no sampling but with join enumeration (with reducing existences)
       JoinOptions{
-          .num_joins = 18,
+          .num_joins = 18 - 4 * kIsDebug,
           .reducingExistences = true,
       },
       // slow one, with sampling
@@ -159,12 +164,12 @@ TEST_F(JoinTest, perfJoinStar) {
       },
       // no sampling but with join enumeration (no reducing existences)
       JoinOptions{
-          .num_joins = 9,
+          .num_joins = 9 - kIsDebug,
           .reducingExistences = false,
       },
       // no sampling but with join enumeration (with reducing existences)
       JoinOptions{
-          .num_joins = 9,
+          .num_joins = 9 - kIsDebug,
           .reducingExistences = true,
       },
       // slow one, with sampling
@@ -230,17 +235,17 @@ TEST_F(JoinTest, perfJoinClique) {
   static constexpr std::array kJoinOptions = {
       // fast one, without join enumeration and sampling
       JoinOptions{
-          .num_joins = 10,
+          .num_joins = 200,
           .syntacticJoinOrder = true,
       },
       // no sampling but with join enumeration (no reducing existences)
       JoinOptions{
-          .num_joins = 6,
+          .num_joins = 6 - kIsDebug,
           .reducingExistences = false,
       },
       // no sampling but with join enumeration (with reducing existences)
       JoinOptions{
-          .num_joins = 6,
+          .num_joins = 6 - kIsDebug,
           .reducingExistences = true,
       },
       // slow one, with sampling
