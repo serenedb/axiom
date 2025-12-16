@@ -308,33 +308,6 @@ std::optional<JoinCandidate> reducingJoins(
   return reducing;
 }
 
-// Calls 'func' with join, joined table and fanout for the joinable tables.
-template <typename Func>
-void forJoinedTables(const PlanState& state, Func func) {
-  state.placed.forEach([&](PlanObjectCP placedTable) {
-    if (!placedTable->isTable()) {
-      return;
-    }
-
-    for (auto join : joinedBy(placedTable)) {
-      if (join->isNonCommutative()) {
-        if (placedTable != join->leftTable()) {
-          continue;
-        }
-        if (state.mayConsiderNext(join->rightTable()) || join->markColumn()) {
-          func(join, join->rightTable(), join->lrFanout());
-        }
-      } else {
-        auto [table, fanout] = join->otherTable(placedTable);
-        if (!state.dt->hasTable(table) || !state.mayConsiderNext(table)) {
-          continue;
-        }
-        func(join, table, fanout);
-      }
-    }
-  });
-}
-
 void addExtraEdges(PlanState& state, JoinCandidate& candidate) {
   // See if there are more join edges from the first of 'candidate' to already
   // placed tables. Fill in the non-redundant equalities into the join edge.
@@ -361,16 +334,36 @@ void addExtraEdges(PlanState& state, JoinCandidate& candidate) {
 std::vector<JoinCandidate> Optimization::nextJoins(PlanState& state) const {
   std::vector<JoinCandidate> candidates;
   candidates.reserve(state.dt->tables.size());
-  forJoinedTables(
-      state, [&](JoinEdgeP join, PlanObjectCP joined, float fanout) {
-        if (!state.placed.contains(joined) && state.dt->hasJoin(join) &&
-            state.dt->hasTable(joined)) {
-          candidates.emplace_back(join, joined, fanout);
-          if (join->isInner()) {
-            addExtraEdges(state, candidates.back());
-          }
-        }
-      });
+  state.placed.forEach([&](PlanObjectCP placedTable) {
+    if (options_.syntacticJoinOrder && !candidates.empty()) {
+      return;
+    }
+    if (!placedTable->isTable()) {
+      return;
+    }
+    for (auto* join : joinedBy(placedTable)) {
+      PlanObjectCP joined{};
+      float fanout{};
+      if (placedTable == join->leftTable()) {
+        joined = join->rightTable();
+        fanout = join->lrFanout();
+      } else if (join->isNonCommutative()) {
+        continue;
+      } else {
+        joined = join->leftTable();
+        fanout = join->rlFanout();
+      }
+      // TODO Think about what in what order to make these checks.
+      if (state.placed.contains(joined) || !state.dt->hasTable(joined) ||
+          !state.mayConsiderNext(joined) || !state.dt->hasJoin(join)) {
+        continue;
+      }
+      auto& candidate = candidates.emplace_back(join, joined, fanout);
+      if (join->isInner()) {
+        addExtraEdges(state, candidate);
+      }
+    }
+  });
 
   if (candidates.empty()) {
     // There are no join edges. There could still be cross joins.
@@ -386,12 +379,12 @@ std::vector<JoinCandidate> Optimization::nextJoins(PlanState& state) const {
   // Take the first hand joined tables and bundle them with reducing joins that
   // can go on the build side.
 
-  if (!options_.syntacticJoinOrder && !candidates.empty()) {
+  if (!options_.syntacticJoinOrder) {
     std::vector<JoinCandidate> bushes;
     for (auto& candidate : candidates) {
       if (auto bush = reducingJoins(
               state, candidate, options_.enableReducingExistences)) {
-        bushes.push_back(std::move(bush.value()));
+        bushes.push_back(std::move(*bush));
         addExtraEdges(state, bushes.back());
       }
     }
