@@ -595,16 +595,6 @@ float fanoutJoinTypeLimit(
   }
 }
 
-void setMarkTrueFraction(
-    ColumnCP mark,
-    velox::core::JoinType joinType,
-    float fanout,
-    float rlFanout) {
-  const_cast<Value&>(mark->value()).trueFraction = std::min<float>(
-      1,
-      joinType == velox::core::JoinType::kLeftSemiProject ? fanout : rlFanout);
-}
-
 // Returns the positions in 'keys' for the expressions that determine the
 // partition. empty if the partition is not decided by 'keys'
 std::vector<uint32_t> joinKeyPartition(
@@ -1291,10 +1281,6 @@ void Optimization::joinByKeys(
     columns.push_back(column);
   });
 
-  if (mark) {
-    setMarkTrueFraction(mark, joinType, lrFanout, rlFanout);
-  }
-
   tryOptimizeSemiProject(joinType, mark, state, negation_);
 
   // If there is an existence flag, it is the rightmost result column.
@@ -1604,8 +1590,6 @@ void Optimization::crossJoin(
 
   // If there is an existence flag, it is the rightmost result column.
   if (mark) {
-    setMarkTrueFraction(
-        mark, joinType, candidate.fanout, candidate.join->rlFanout());
     columnSet.add(mark);
     columns.push_back(mark);
   }
