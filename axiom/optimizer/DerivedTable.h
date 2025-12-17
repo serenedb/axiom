@@ -64,6 +64,8 @@ using WindowVector = QGVector<WindowCP>;
 struct DerivedTable : public PlanObject {
   DerivedTable() : PlanObject(PlanType::kDerivedTableNode) {}
 
+  // Used only for Union/UnionAll derived tables.
+  float planCardinality{};
   float cardinality{};
 
   /// Correlation name.
@@ -230,8 +232,6 @@ struct DerivedTable : public PlanObject {
   /// Memoizes plans for 'this' and fills in 'cardinality'. Needed before adding
   /// 'this' as a join side because join sides must have a cardinality guess.
   void makeInitialPlan();
-
-  PlanP bestInitialPlan() const;
 
   std::string toString() const override;
 

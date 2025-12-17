@@ -271,6 +271,9 @@ lp::ValuesNodePtr ToGraph::tryFoldConstantDt(DerivedTableP dt) const {
   if (discretePredicates == nullptr) {
     return nullptr;
   }
+  if (dt->cardinality == 0) {
+    dt->makeInitialPlan();
+  }
 
   VELOX_CHECK(dt->conjuncts.empty());
   VELOX_CHECK_NULL(dt->write);
@@ -1677,8 +1680,6 @@ void ToGraph::finalizeSubqueryDt(
 
   currentDt_ = outerDt;
   currentDt_->addTable(dt);
-
-  dt->makeInitialPlan();
 }
 
 namespace {
@@ -2410,32 +2411,9 @@ void ToGraph::translateSetJoin(const lp::SetNode& set) {
     setDt->exprs.push_back(c);
   }
   setDt->columns = columns;
-  setDt->makeInitialPlan();
 }
 
 namespace {
-
-void makeUnionDistributionAndStats(DerivedTableP setDt) {
-  for (const auto* childDt : setDt->children) {
-    VELOX_DCHECK_EQ(childDt->columns.size(), setDt->columns.size());
-
-    const auto& plan = *childDt->bestInitialPlan()->op;
-    setDt->cardinality += plan.resultCardinality();
-
-    // This doesn't look correct because childValue and setValue
-    // can have same address. Even if we fix code to sum up correctly.
-    // Child columns still will share cardinality with set columns.
-    // But this is how it was implemented initially.
-    // Let's revisit this later.
-    for (size_t i = 0; i < setDt->columns.size(); ++i) {
-      const auto& setValue = setDt->columns[i]->value().cardinality;
-      const auto& childValue = plan.columns()[i]->value().cardinality;
-      // The Column is created in setDt before all branches are planned so the
-      // value is mutated here.
-      const_cast<float&>(setValue) += childValue;
-    }
-  }
-}
 
 void translateSetOperationInput(
     const lp::LogicalPlanNode& input,
@@ -2484,40 +2462,36 @@ void ToGraph::translateUnion(const lp::SetNode& set) {
     auto* newDt = std::exchange(currentDt_, setDt);
 
     const auto& type = input.outputType();
+    for (auto i : usedChannels(input)) {
+      const auto& name = type->nameOf(i);
 
-    if (isFirstInput) {
-      // This is the first input of a union tree.
-      for (auto i : usedChannels(input)) {
-        const auto& name = type->nameOf(i);
+      ExprCP inner = translateColumn(name);
+      newDt->exprs.push_back(inner);
 
-        ExprCP inner = translateColumn(name);
-        newDt->exprs.push_back(inner);
-
+      if (isFirstInput) {
         // The top dt has the same columns as all the unioned dts.
         const auto* columnName = toName(name);
         auto* outer =
             make<Column>(columnName, setDt, inner->value(), columnName);
         setDt->columns.push_back(outer);
-        newDt->columns.push_back(outer);
+      } else {
+        VELOX_DCHECK_LE(newDt->exprs.size(), setDt->columns.size());
+        auto* outer = setDt->columns[newDt->exprs.size() - 1];
+        // TODO Handle type coercions.
+        VELOX_CHECK(outer->value().type == inner->value().type);
+        const_cast<float&>(outer->value().cardinality) +=
+            inner->value().cardinality;
       }
-
-      isFirstInput = false;
-    } else {
-      for (auto i : usedChannels(input)) {
-        ExprCP inner = translateColumn(type->nameOf(i));
-        newDt->exprs.push_back(inner);
-      }
-
-      // Same outward facing columns as the top dt of union.
-      newDt->columns = setDt->columns;
     }
+    VELOX_DCHECK_EQ(newDt->exprs.size(), setDt->columns.size());
+    isFirstInput = false;
+    // Same outward facing columns as the top dt of union.
+    newDt->columns = setDt->columns;
 
-    newDt->makeInitialPlan();
     setDt->children.push_back(newDt);
   };
 
   translateSetOperationInput(set, shouldFlatten, translateUnionInput);
-  makeUnionDistributionAndStats(setDt);
 
   renames_ = std::move(renames);
   for (const auto* column : setDt->columns) {
