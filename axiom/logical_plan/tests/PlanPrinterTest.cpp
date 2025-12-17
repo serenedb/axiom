@@ -487,7 +487,7 @@ TEST_F(PlanPrinterTest, unnest) {
   }
 
   {
-    auto plan = PlanBuilder(/* enableCorsions */ true)
+    auto plan = PlanBuilder(/* enableCoercions */ true)
                     .unnest({Sql("map(array[1, 2, 3], array[10, 20, 30])")
                                  .unnestAs("x", "y")})
                     .project({"x + y"})
