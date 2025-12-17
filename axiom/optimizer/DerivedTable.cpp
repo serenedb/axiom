@@ -885,11 +885,10 @@ void DerivedTable::distributeConjuncts() {
           continue;
         }
 
-        auto numChildren =
-            innerDt->children.empty() ? 1 : innerDt->children.size();
+        const bool hasChildren = !innerDt->children.empty();
+        auto numChildren = hasChildren ? innerDt->children.size() : 1;
         for (auto childIdx = 0; childIdx < numChildren; ++childIdx) {
-          auto childDt =
-              numChildren == 1 ? innerDt : innerDt->children[childIdx];
+          auto childDt = hasChildren ? innerDt->children[childIdx] : innerDt;
           auto imported = childDt->importExpr(conjuncts[i]);
           if (childDt->aggregation) {
             childDt->having.push_back(imported);
