@@ -947,6 +947,28 @@ void DerivedTable::distributeConjuncts() {
       queryCtx()->optimization()->filterUpdated(table->as<BaseTable>());
     }
   });
+  if (cardinality != 0) {
+    return;
+  }
+  tableSet.forEachMutable([&](PlanObjectP table) {
+    if (table->is(PlanType::kDerivedTableNode)) {
+      auto* dt = table->as<DerivedTable>();
+      if (dt->cardinality != 0) {
+        return;
+      }
+      if (!dt->setOp) {
+        dt->makeInitialPlan();
+        return;
+      }
+      for (auto* child : dt->children) {
+        if (child->cardinality == 0) {
+          child->as<DerivedTable>()->makeInitialPlan();
+        }
+        dt->planCardinality += child->planCardinality;
+      }
+      dt->cardinality = std::max<float>(1, dt->planCardinality);
+    }
+  });
 }
 
 void DerivedTable::makeInitialPlan() {
@@ -970,22 +992,10 @@ void DerivedTable::makeInitialPlan() {
   optimization->makeJoins(state);
 
   auto plan = state.plans.best()->op;
-  this->cardinality = std::max<float>(1, plan->resultCardinality());
+  this->planCardinality = plan->resultCardinality();
+  this->cardinality = std::max<float>(1, this->planCardinality);
 
   optimization->memo()[key] = std::move(state.plans);
-}
-
-PlanP DerivedTable::bestInitialPlan() const {
-  MemoKey key;
-  key.firstTable = this;
-  key.tables.add(this);
-  key.columns.unionObjects(columns);
-
-  auto& memo = queryCtx()->optimization()->memo();
-  auto it = memo.find(key);
-  VELOX_CHECK(it != memo.end(), "Expecting to find a plan for union branch");
-
-  return it->second.best();
 }
 
 std::string DerivedTable::toString() const {

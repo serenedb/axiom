@@ -11,7 +11,7 @@ dt1: cntrycode, numcust, totacctbal
   tables: t2, dt3, dt5
   joins:
     t2 SEMI dt5 ON t2.c_custkey = dt5.o_custkey
-  syntactic join order: 9, 13, 35
+  syntactic join order: 9, 13, 34
   aggregates: count() AS numcust, sum(t2.c_acctbal) AS totacctbal
   grouping keys: substr(t2.c_phone, 1, 2)
   filter: gt(t2.c_acctbal, dt3.avg) and not(dt1.__mark0)
@@ -59,11 +59,11 @@ Project (redundant) -> dt1.cntrycode, dt1.numcust, dt1.totacctbal
     dt1.numcust := dt1.numcust
     dt1.totacctbal := dt1.totacctbal
   OrderBy -> dt1.cntrycode, dt1.numcust, dt1.totacctbal
-    Aggregation (dt1.__p67) -> dt1.cntrycode, dt1.numcust, dt1.totacctbal
+    Aggregation (dt1.__p66) -> dt1.cntrycode, dt1.numcust, dt1.totacctbal
         dt1.numcust := count()
         dt1.totacctbal := sum(t2.c_acctbal)
-      Project -> dt1.__p67, t2.c_acctbal
-          dt1.__p67 := substr(t2.c_phone, 1, 2)
+      Project -> dt1.__p66, t2.c_acctbal
+          dt1.__p66 := substr(t2.c_phone, 1, 2)
           t2.c_acctbal := t2.c_acctbal
         Filter -> t2.c_phone, t2.c_acctbal, dt3.avg
             gt(t2.c_acctbal, dt3.avg)
