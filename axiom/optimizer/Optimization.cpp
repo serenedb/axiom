@@ -54,13 +54,11 @@ Optimization::Optimization(
       toVelox_{session_, runnerOptions_, options_} {
   queryCtx()->optimization() = this;
   root_ = toGraph_.makeQueryGraph(*logicalPlan_);
-  root_->distributeConjuncts();
-  root_->addImpliedJoins();
-  root_->linkTablesToJoins();
-  for (auto* join : root_->joins) {
-    join->guessFanout();
-  }
   toGraph_.setDtOutput(root_, *logicalPlan_);
+
+  if (!options_.lazyOptimizeGraph) {
+    optimizeGraph();
+  }
 }
 
 // static
@@ -106,6 +104,15 @@ void Optimization::trace(
                                                        : "Abandoned: ")
               << id << ": " << cost.toString() << ": " << " "
               << plan.toString(true, false) << std::endl;
+  }
+}
+
+void Optimization::optimizeGraph() {
+  root_->distributeConjuncts();
+  root_->addImpliedJoins();
+  root_->linkTablesToJoins();
+  for (auto* join : root_->joins) {
+    join->guessFanout();
   }
 }
 
