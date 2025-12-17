@@ -52,7 +52,7 @@ class TestTableLayout : public TableLayout {
   std::span<const Column* const> discretePredicateColumns() const override;
 
   std::unique_ptr<DiscretePredicates> discretePredicates(
-      const std::vector<const Column*>& columns) const override;
+      std::span<const Column* const> columns) const override;
 
   std::pair<int64_t, int64_t> sample(
       const velox::connector::ConnectorTableHandlePtr&,
