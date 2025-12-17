@@ -84,6 +84,8 @@ struct OptimizerOptions {
 
   bool enableIndexLookupJoin = true;
 
+  bool lazyOptimizeGraph = false;
+
   bool isMapAsStruct(std::string_view table, std::string_view column) const {
     if (allMapsAsStruct) {
       return true;
