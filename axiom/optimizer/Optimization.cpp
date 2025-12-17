@@ -1927,39 +1927,29 @@ PlanP unionPlan(
   return make<Plan>(result, states[0]);
 }
 
-std::vector<int32_t> sortByStartingScore(const PlanObjectVector& tables) {
-  std::vector<float> scores;
-  scores.reserve(tables.size());
-  for (auto table : tables) {
-    scores.emplace_back(tableCardinality(table));
-  }
-
-  std::vector<int32_t> indices(tables.size());
-  std::iota(indices.begin(), indices.end(), 0);
-  std::ranges::sort(indices, [&](int32_t left, int32_t right) {
-    return scores[left] > scores[right];
-  });
-
-  return indices;
-}
 } // namespace
 
 void Optimization::makeJoins(PlanState& state) {
-  PlanObjectVector firstTables;
+  QGVector<std::tuple<bool, float, PlanObjectCP>> firstTables;
 
   if (options_.syntacticJoinOrder) {
     const auto firstTableId = state.dt->joinOrder[0];
     VELOX_CHECK(state.dt->startTables.BitSet::contains(firstTableId));
 
-    firstTables.push_back(queryCtx()->objectAt(firstTableId));
+    firstTables.emplace_back(false, 0, queryCtx()->objectAt(firstTableId));
   } else {
-    firstTables = state.dt->startTables.toObjects();
+    firstTables.reserve(state.dt->startTables.size());
+    state.dt->startTables.forEach([&](PlanObjectCP table) {
+      const float cardinality = tableCardinality(table);
+      const bool maybeJoins = table->is(PlanType::kDerivedTableNode) &&
+          table->as<DerivedTable>()->tables.size() > 1;
+      firstTables.emplace_back(maybeJoins, -cardinality, table);
+    });
+    // First tables that don't have joins and with larger cardinality.
+    std::ranges::sort(firstTables);
   }
 
-  auto sortedIndices = sortByStartingScore(firstTables);
-
-  for (auto index : sortedIndices) {
-    auto from = firstTables.at(index);
+  for (auto [maybeJoins, score, from] : firstTables) {
     if (from->is(PlanType::kTableNode)) {
       auto table = from->as<BaseTable>();
       auto indices = table->chooseLeafIndex();
