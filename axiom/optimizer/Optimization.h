@@ -51,6 +51,11 @@ class Optimization {
   Optimization(const Optimization& other) = delete;
   Optimization& operator=(const Optimization& other) = delete;
 
+  DerivedTableCP graph() const {
+    return root_;
+  }
+  void optimizeGraph();
+
   /// Returns the optimized RelationOp plan for 'plan' given at construction.
   PlanP bestPlan();
 
