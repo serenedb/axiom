@@ -138,7 +138,7 @@ std::span<const Column* const> TestTableLayout::discretePredicateColumns()
 }
 
 std::unique_ptr<DiscretePredicates> TestTableLayout::discretePredicates(
-    [[maybe_unused]] const std::vector<const Column*>& columns) const {
+    [[maybe_unused]] const std::span<const Column* const> columns) const {
   if (discreteValueColumns_.empty()) {
     return nullptr;
   }

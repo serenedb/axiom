@@ -322,7 +322,7 @@ class TableLayout {
   /// @param columns A subset of 'discretePredicateColumns'. Must not be empty.
   /// Must not contain duplicates.
   virtual std::unique_ptr<DiscretePredicates> discretePredicates(
-      [[maybe_unused]] const std::vector<const Column*>& columns) const {
+      [[maybe_unused]] std::span<const Column* const> columns) const {
     return nullptr;
   }
 
