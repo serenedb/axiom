@@ -177,10 +177,8 @@ void LocalHiveConnectorMetadata::ensureInitialized() const {
 std::shared_ptr<velox::core::QueryCtx> LocalHiveConnectorMetadata::makeQueryCtx(
     const std::string& queryId) {
   std::unordered_map<std::string, std::string> config;
-  std::unordered_map<std::string, std::shared_ptr<velox::config::ConfigBase>>
-      connectorConfigs;
-  connectorConfigs[hiveConnector_->connectorId()] =
-      std::const_pointer_cast<velox::config::ConfigBase>(hiveConfig_->config());
+  velox::core::ConnectorConfigs connectorConfigs;
+  connectorConfigs[hiveConnector_->connectorId()] = hiveConfig_->config();
 
   return velox::core::QueryCtx::create(
       hiveConnector_->executor(),
