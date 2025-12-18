@@ -324,7 +324,7 @@ void TestConnector::setDiscreteValues(
 
 std::shared_ptr<velox::connector::Connector> TestConnectorFactory::newConnector(
     const std::string& id,
-    std::shared_ptr<const velox::config::ConfigBase> config,
+    velox::config::ConfigPtr config,
     folly::Executor*,
     folly::Executor*) {
   return std::make_shared<TestConnector>(id, std::move(config));
