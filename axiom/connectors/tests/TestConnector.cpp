@@ -34,7 +34,7 @@ TestTable::TestTable(
     VELOX_CHECK(
         !columnName.empty(), "column {} in table {} has empty name", i, name_);
     exportedColumns_.emplace_back(
-        std::make_unique<Column>(columnName, columnType, /*hidden=*/false));
+        std::make_unique<Column>(columnName, columnType));
     columnVector.emplace_back(exportedColumns_.back().get());
     auto [_, ok] = columns_.emplace(columnName, exportedColumns_.back().get());
     VELOX_CHECK(
