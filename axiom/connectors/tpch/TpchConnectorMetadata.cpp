@@ -257,7 +257,7 @@ TablePtr TpchConnectorMetadata::findTable(std::string_view name) {
     const auto columnName = tableType->nameOf(i);
     const auto columnType = tableType->childAt(i);
     table->columns()[columnName] =
-        std::make_unique<Column>(columnName, columnType, /*hidden=*/false);
+        std::make_unique<Column>(columnName, columnType);
   }
 
   table->makeDefaultLayout(*this, scaleFactor);
