@@ -1462,7 +1462,8 @@ AggregationPlanCP ToGraph::translateAggregation(const lp::AggregateNode& agg) {
       if (metadata.ignoreDuplicates) {
         return false;
       }
-      if ((aggName == toName("min") || aggName == toName("max")) &&
+      if ((aggName == toName("presto_min") ||
+           aggName == toName("presto_max")) &&
           args.size() == 1) {
         // Presto's min/max are not marked 'ignoreDuplicates' because while
         // min(x) and max(x) do ignore duplicates, min(x, n) and max(x, n) do
