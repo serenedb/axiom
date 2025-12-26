@@ -25,14 +25,14 @@ class Session final {
  public:
   Session(
       std::string queryId,
-      const std::shared_ptr<const velox::config::IConfig> config = {})
-      : queryId_{std::move(queryId)}, config_{config} {}
+      std::shared_ptr<const velox::config::IConfig> config = {})
+      : queryId_{std::move(queryId)}, config_{std::move(config)} {}
 
   const std::string& queryId() const {
     return queryId_;
   }
 
-  const std::shared_ptr<const velox::config::IConfig>& config() const {
+  const auto& config() const {
     return config_;
   }
 
