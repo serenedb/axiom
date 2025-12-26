@@ -23,10 +23,17 @@ namespace facebook::axiom {
 /// Read-only query-specific information.
 class Session final {
  public:
-  Session(std::string queryId) : queryId_{queryId} {}
+  Session(
+      std::string queryId,
+      const std::shared_ptr<const velox::config::IConfig> config = {})
+      : queryId_{std::move(queryId)}, config_{config} {}
 
   const std::string& queryId() const {
     return queryId_;
+  }
+
+  const std::shared_ptr<const velox::config::IConfig>& config() const {
+    return config_;
   }
 
   connector::ConnectorSessionPtr toConnectorSession(
@@ -34,6 +41,7 @@ class Session final {
 
  private:
   const std::string queryId_;
+  const std::shared_ptr<const velox::config::IConfig> config_;
 };
 
 using SessionPtr = std::shared_ptr<Session>;
