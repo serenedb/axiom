@@ -49,8 +49,8 @@ class JoinTest : public test::QueryTestBase {
 struct JoinOptions {
   size_t num_joins = 0;
   bool syntacticJoinOrder = false;
-  bool reducingExistences = false;
   bool sample = false;
+  bool reducingExistences = false;
 };
 
 constexpr size_t kNumTables = 201;
@@ -78,25 +78,25 @@ TEST_F(JoinTest, perfJoinChain) {
   }
 
   static constexpr std::array kJoinOptions = {
-      // fast one, without join enumeration and sampling
+      // fast one, without join enumeration, sampling, reducing existences
       JoinOptions{
           .num_joins = 200,
           .syntacticJoinOrder = true,
       },
-      // no sampling but with join enumeration (no reducing existences)
+      // join enumeration
       JoinOptions{
           .num_joins = 18 - 4 * kIsDebug,
-          .reducingExistences = false,
       },
-      // no sampling but with join enumeration (with reducing existences)
+      // join enumeration with sampling
       JoinOptions{
           .num_joins = 18 - 4 * kIsDebug,
-          .reducingExistences = true,
-      },
-      // slow one, with sampling
-      JoinOptions{
-          .num_joins = 3,
           .sample = true,
+      },
+      // slow one, with join enumeration, sampling, reducing existences
+      JoinOptions{
+          .num_joins = 18 - 4 * kIsDebug,
+          .sample = true,
+          .reducingExistences = true,
       },
   };
 
@@ -157,25 +157,25 @@ TEST_F(JoinTest, perfJoinStar) {
   }
 
   static constexpr std::array kJoinOptions = {
-      // fast one, without join enumeration and sampling
+      // fast one, without join enumeration, sampling, reducing existences
       JoinOptions{
           .num_joins = 200,
           .syntacticJoinOrder = true,
       },
-      // no sampling but with join enumeration (no reducing existences)
+      // join enumeration
       JoinOptions{
           .num_joins = 9 - kIsDebug,
-          .reducingExistences = false,
       },
-      // no sampling but with join enumeration (with reducing existences)
+      // join enumeration with sampling
       JoinOptions{
           .num_joins = 9 - kIsDebug,
-          .reducingExistences = true,
-      },
-      // slow one, with sampling
-      JoinOptions{
-          .num_joins = 3,
           .sample = true,
+      },
+      // slow one, with join enumeration, sampling, reducing existences
+      JoinOptions{
+          .num_joins = 9 - kIsDebug,
+          .sample = true,
+          .reducingExistences = true,
       },
   };
 
@@ -233,25 +233,25 @@ TEST_F(JoinTest, perfJoinClique) {
   }
 
   static constexpr std::array kJoinOptions = {
-      // fast one, without join enumeration and sampling
+      // fast one, without join enumeration, sampling, reducing existences
       JoinOptions{
           .num_joins = 200,
           .syntacticJoinOrder = true,
       },
-      // no sampling but with join enumeration (no reducing existences)
+      // join enumeration
       JoinOptions{
           .num_joins = 6 - kIsDebug,
-          .reducingExistences = false,
       },
-      // no sampling but with join enumeration (with reducing existences)
+      // join enumeration with sampling
       JoinOptions{
           .num_joins = 6 - kIsDebug,
-          .reducingExistences = true,
-      },
-      // slow one, with sampling
-      JoinOptions{
-          .num_joins = 3,
           .sample = true,
+      },
+      // slow one, with join enumeration, sampling, reducing existences
+      JoinOptions{
+          .num_joins = 6 - kIsDebug,
+          .sample = true,
+          .reducingExistences = true,
       },
   };
 
