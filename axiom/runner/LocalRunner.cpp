@@ -315,20 +315,23 @@ velox::ContinueFuture LocalRunner::wait() {
   return folly::collectAll(std::move(futures)).defer([](auto&&) {});
 }
 
-void LocalRunner::waitForCompletion(int32_t maxWaitMicros) {
+void LocalRunner::waitForCompletion(
+    std::shared_ptr<LocalRunner>&& runner,
+    int32_t maxWaitMicros) {
   std::vector<velox::ContinueFuture> futures;
   {
-    std::lock_guard<std::mutex> l(mutex_);
-    if (state_ == State::kInitialized) {
+    std::lock_guard<std::mutex> l(runner->mutex_);
+    if (runner->state_ == State::kInitialized) {
       return;
     }
-    for (auto& stage : stages_) {
+    for (auto& stage : runner->stages_) {
       for (auto& task : stage) {
         futures.push_back(task->taskDeletionFuture());
       }
       stage.clear();
     }
   }
+  runner = nullptr;
 
   const auto startTime = velox::getCurrentTimeMicro();
   for (auto& future : futures) {
