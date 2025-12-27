@@ -124,11 +124,11 @@ class LocalRunner : public Runner,
   /// Best-effort attempt to cancel the execution.
   void abort() override;
 
-  /// @pre state() != State::kInitialized
   velox::ContinueFuture wait();
 
-  /// @pre state() != State::kInitialized
-  void waitForCompletion(int32_t maxWaitMicros) override;
+  static void waitForCompletion(
+      std::shared_ptr<LocalRunner>&& runner,
+      int32_t maxWaitMicros);
 
   State state() const override {
     return state_;

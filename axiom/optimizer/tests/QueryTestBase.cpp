@@ -79,12 +79,9 @@ logical_plan::LogicalPlanNodePtr QueryTestBase::parseSelect(
 }
 
 namespace {
-void waitForCompletion(const std::shared_ptr<runner::LocalRunner>& runner) {
+void waitForCompletion(std::shared_ptr<runner::LocalRunner>&& runner) {
   if (runner) {
-    try {
-      runner->waitForCompletion(50000);
-    } catch (const std::exception& /*ignore*/) {
-    }
+    runner::LocalRunner::waitForCompletion(std::move(runner), 50000);
   }
 }
 } // namespace
@@ -112,7 +109,7 @@ TestResult QueryTestBase::runFragmentedPlan(
   TestResult result;
 
   SCOPE_EXIT {
-    waitForCompletion(result.runner);
+    waitForCompletion(std::move(result.runner));
     queryCtx_.reset();
   };
 
