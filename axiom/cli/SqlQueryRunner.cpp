@@ -281,7 +281,7 @@ std::string SqlQueryRunner::runExplainAnalyze(
 
   auto runner = makeLocalRunner(planAndStats, queryCtx, options);
   SCOPE_EXIT {
-    waitForCompletion(runner);
+    waitForCompletion(std::move(runner));
   };
 
   auto results = fetchResults(*runner);
@@ -365,7 +365,7 @@ std::vector<velox::RowVectorPtr> SqlQueryRunner::runSql(
 
   auto runner = makeLocalRunner(planAndStats, queryCtx, options);
   SCOPE_EXIT {
-    waitForCompletion(runner);
+    waitForCompletion(std::move(runner));
   };
 
   auto results = fetchResults(*runner);
