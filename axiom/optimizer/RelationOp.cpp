@@ -1335,8 +1335,6 @@ TableWrite::TableWrite(
       write{write} {
   cost_.inputCardinality = inputCardinality();
   cost_.unitCost = 0.01;
-  VELOX_DCHECK_EQ(
-      this->inputColumns.size(), this->write->table().type()->size());
 }
 
 std::string TableWrite::toString(bool recursive, bool detail) const {
