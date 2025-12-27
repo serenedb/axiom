@@ -114,13 +114,9 @@ class SqlQueryRunner {
       const RunOptions& options);
 
   static void waitForCompletion(
-      const std::shared_ptr<facebook::axiom::runner::LocalRunner>& runner) {
-    if (runner) {
-      try {
-        runner->waitForCompletion(500000);
-      } catch (const std::exception&) {
-      }
-    }
+      std::shared_ptr<facebook::axiom::runner::LocalRunner>&& runner) {
+    facebook::axiom::runner::LocalRunner::waitForCompletion(
+        std::move(runner), 500000);
   }
 
   std::shared_ptr<facebook::velox::cache::AsyncDataCache> cache_;

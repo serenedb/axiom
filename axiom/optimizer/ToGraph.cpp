@@ -160,7 +160,7 @@ std::vector<velox::RowVectorPtr> runConstantPlan(
         std::dynamic_pointer_cast<velox::RowVector>(
             velox::BaseVector::copy(*rows, pool)));
   }
-  runner->waitForCompletion(1'000'000);
+  runner::LocalRunner::waitForCompletion(std::move(runner), 1'000'000);
   return results;
 }
 

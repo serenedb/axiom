@@ -97,7 +97,7 @@ std::shared_ptr<velox::core::QueryCtx> sampleQueryCtx(
       fmt::format("sample:{}", ++kQueryCounter));
 }
 
-std::shared_ptr<runner::Runner> prepareSampleRunner(
+std::shared_ptr<runner::LocalRunner> prepareSampleRunner(
     SchemaTableCP table,
     const ExprVector& keys,
     int64_t mod,
@@ -161,12 +161,12 @@ std::shared_ptr<runner::Runner> prepareSampleRunner(
 using KeyFreq = folly::F14FastMap<uint32_t, uint32_t>;
 
 std::unique_ptr<KeyFreq> runJoinSample(
-    runner::Runner& runner,
+    std::shared_ptr<runner::LocalRunner>&& runner,
     int32_t maxRows = 0) {
   auto result = std::make_unique<folly::F14FastMap<uint32_t, uint32_t>>();
 
   int32_t rowCount = 0;
-  while (auto rows = runner.next()) {
+  while (auto rows = runner->next()) {
     rowCount += rows->size();
     auto hashes = rows->childAt(0)->as<velox::FlatVector<int64_t>>();
     for (auto i = 0; i < hashes->size(); ++i) {
@@ -175,12 +175,12 @@ std::unique_ptr<KeyFreq> runJoinSample(
       }
     }
     if (maxRows && rowCount > maxRows) {
-      runner.abort();
+      runner->abort();
       break;
     }
   }
 
-  runner.waitForCompletion(1'000'000);
+  runner::LocalRunner::waitForCompletion(std::move(runner), 1'000'000);
   return result;
 }
 
@@ -240,9 +240,13 @@ std::pair<float, float> sampleJoin(
       prepareSampleRunner(right, rightKeys, kMaxCardinality, fraction);
 
   auto leftRun = std::make_shared<velox::AsyncSource<KeyFreq>>(
-      [leftRunner]() { return runJoinSample(*leftRunner); });
+      [leftRunner = std::move(leftRunner)]() mutable {
+        return runJoinSample(std::move(leftRunner));
+      });
   auto rightRun = std::make_shared<velox::AsyncSource<KeyFreq>>(
-      [rightRunner]() { return runJoinSample(*rightRunner); });
+      [rightRunner = std::move(rightRunner)]() mutable {
+        return runJoinSample(std::move(rightRunner));
+      });
 
   if (auto executor = queryCtx()->optimization()->veloxQueryCtx()->executor()) {
     executor->add([leftRun]() { leftRun->prepare(); });
