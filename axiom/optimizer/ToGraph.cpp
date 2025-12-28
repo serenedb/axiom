@@ -1615,7 +1615,7 @@ void ToGraph::addJoin(const lp::JoinNode& join, uint64_t allowedInDt) {
   VELOX_DCHECK(!currentDt_->tables.empty());
   auto* leftTable = !isInner ? currentDt_->tables.back() : nullptr;
 
-  if (queryCtx()->optimization()->options().syntacticJoinOrder) {
+  if (queryCtx()->optimization()->options().syntacticJoinOrder()) {
     allowedInDt = deny(allowedInDt, lp::NodeKind::kJoin);
   }
 
