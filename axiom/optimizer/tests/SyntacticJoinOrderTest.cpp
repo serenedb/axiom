@@ -184,13 +184,13 @@ TEST_F(SyntacticJoinOrderTest, innerJoins) {
               .build();
 
       {
-        optimizerOptions_.syntacticJoinOrder = false;
+        optimizerOptions_.joinOrder = JoinOrder::kCost;
         auto plan = toSingleNodePlan(logicalPlan);
         AXIOM_ASSERT_PLAN(plan, optimizedMatcher);
       }
 
       {
-        optimizerOptions_.syntacticJoinOrder = true;
+        optimizerOptions_.joinOrder = JoinOrder::kSyntactic;
         auto plan = toSingleNodePlan(logicalPlan);
 
         auto matcher = createMatcher(order[0], order[1], order[2]);
@@ -249,13 +249,13 @@ TEST_F(SyntacticJoinOrderTest, innerJoins) {
               .build();
 
       {
-        optimizerOptions_.syntacticJoinOrder = false;
+        optimizerOptions_.joinOrder = JoinOrder::kCost;
         auto plan = toSingleNodePlan(logicalPlan);
         AXIOM_ASSERT_PLAN(plan, optimizedMatcher);
       }
 
       {
-        optimizerOptions_.syntacticJoinOrder = true;
+        optimizerOptions_.joinOrder = JoinOrder::kSyntactic;
         auto plan = toSingleNodePlan(logicalPlan);
 
         auto matcher = createMatcher(order[0], order[1], order[2]);
@@ -311,7 +311,7 @@ TEST_F(SyntacticJoinOrderTest, outerJoins) {
         "l_orderkey = o_orderkey and l_returnflag = 'R'");
 
     {
-      optimizerOptions_.syntacticJoinOrder = false;
+      optimizerOptions_.joinOrder = JoinOrder::kCost;
       auto plan = toSingleNodePlan(logicalPlan);
       AXIOM_ASSERT_PLAN(plan, optimizedMatcher);
 
@@ -319,7 +319,7 @@ TEST_F(SyntacticJoinOrderTest, outerJoins) {
     }
 
     {
-      optimizerOptions_.syntacticJoinOrder = true;
+      optimizerOptions_.joinOrder = JoinOrder::kSyntactic;
       auto plan = toSingleNodePlan(logicalPlan);
       AXIOM_ASSERT_PLAN(plan, optimizedMatcher);
 
@@ -334,7 +334,7 @@ TEST_F(SyntacticJoinOrderTest, outerJoins) {
         "l_orderkey = o_orderkey and l_returnflag = 'R'");
 
     {
-      optimizerOptions_.syntacticJoinOrder = false;
+      optimizerOptions_.joinOrder = JoinOrder::kCost;
       auto plan = toSingleNodePlan(logicalPlan);
       AXIOM_ASSERT_PLAN(plan, optimizedMatcher);
 
@@ -342,7 +342,7 @@ TEST_F(SyntacticJoinOrderTest, outerJoins) {
     }
 
     {
-      optimizerOptions_.syntacticJoinOrder = true;
+      optimizerOptions_.joinOrder = JoinOrder::kSyntactic;
       auto plan = toSingleNodePlan(logicalPlan);
 
       auto matcher =

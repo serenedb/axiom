@@ -33,13 +33,13 @@ bool isSingleWorker() {
 PlanState::PlanState(Optimization& optimization, DerivedTableCP dt)
     : optimization(optimization),
       dt(dt),
-      syntacticJoinOrder_{optimization.options().syntacticJoinOrder} {}
+      syntacticJoinOrder_{optimization.options().syntacticJoinOrder()} {}
 
 PlanState::PlanState(Optimization& optimization, DerivedTableCP dt, PlanP plan)
     : optimization(optimization),
       dt(dt),
       cost(plan->cost),
-      syntacticJoinOrder_{optimization.options().syntacticJoinOrder} {
+      syntacticJoinOrder_{optimization.options().syntacticJoinOrder()} {
   // TODO Remove std::max after fixing that we miss PrecomputeProjection costs.
   VELOX_DCHECK_EQ(
       std::max<float>(1, cost.cardinality), plan->op->resultCardinality());
