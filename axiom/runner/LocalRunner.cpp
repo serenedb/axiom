@@ -223,6 +223,7 @@ velox::RowVectorPtr LocalRunner::nextWrite() {
 void LocalRunner::start() {
   VELOX_CHECK_EQ(state_, State::kInitialized);
 
+  params_.serialExecution = !params_.queryCtx->executor();
   params_.maxDrivers = plan_->options().numDrivers;
   params_.planNode = fragments_.back().fragment.planNode;
 
