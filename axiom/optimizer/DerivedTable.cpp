@@ -255,7 +255,7 @@ void DerivedTable::import(
   }
 
   if (!existences.empty()) {
-    if (!queryCtx()->optimization()->options().syntacticJoinOrder) {
+    if (!queryCtx()->optimization()->options().syntacticJoinOrder()) {
       for (auto& exists : existences) {
         // We filter the derived table by importing reducing semijoins.
         // These are based on joins on the outer query but become

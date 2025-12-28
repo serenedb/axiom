@@ -32,6 +32,18 @@
 
 namespace facebook::axiom::optimizer {
 
+std::string_view toString(JoinOrder joinOrder) {
+  switch (joinOrder) {
+    case JoinOrder::kCost:
+      return "cost";
+    case JoinOrder::kSyntactic:
+      return "syntactic";
+    case JoinOrder::kGreedy:
+      return "greedy";
+  }
+  return "unknown";
+}
+
 Optimization::Optimization(
     SessionPtr session,
     const logical_plan::LogicalPlanNode& logicalPlan,
@@ -342,9 +354,6 @@ std::vector<JoinCandidate> Optimization::nextJoins(PlanState& state) const {
   std::vector<JoinCandidate> candidates;
   candidates.reserve(state.dt->tables.size());
   state.placed.forEach([&](PlanObjectCP placedTable) {
-    if (options_.syntacticJoinOrder && !candidates.empty()) {
-      return;
-    }
     if (!placedTable->isTable()) {
       return;
     }
@@ -372,6 +381,12 @@ std::vector<JoinCandidate> Optimization::nextJoins(PlanState& state) const {
     }
   });
 
+  SCOPE_EXIT {
+    if (!options_.costJoinOrder() && candidates.size() > 1) {
+      candidates.erase(candidates.begin() + 1, candidates.end());
+    }
+  };
+
   if (candidates.empty()) {
     // There are no join edges. There could still be cross joins.
     state.dt->startTables.forEach([&](PlanObjectCP object) {
@@ -386,7 +401,7 @@ std::vector<JoinCandidate> Optimization::nextJoins(PlanState& state) const {
   // Take the first hand joined tables and bundle them with reducing joins that
   // can go on the build side.
 
-  if (!options_.syntacticJoinOrder) {
+  if (!options_.syntacticJoinOrder()) {
     std::vector<JoinCandidate> bushes;
     for (auto& candidate : candidates) {
       if (auto bush = reducingJoins(
@@ -1679,7 +1694,7 @@ void Optimization::addJoin(
 
   probeJoin(plan, candidate, state, toTry);
 
-  if (!options_.syntacticJoinOrder && candidate.join->hasRightHashVariant()) {
+  if (!options_.syntacticJoinOrder() && candidate.join->hasRightHashVariant()) {
     // There is a hash based candidate with a non-commutative join.
     // Try a right join variant.
     buildJoin(plan, candidate, state, toTry);
@@ -1902,7 +1917,9 @@ PlanP unionPlan(
 void Optimization::makeJoins(PlanState& state) {
   QGVector<std::tuple<bool, float, PlanObjectCP>> firstTables;
 
-  if (options_.syntacticJoinOrder) {
+  VELOX_DCHECK(!state.dt->startTables.empty());
+  if (options_.syntacticJoinOrder()) {
+    VELOX_DCHECK(!state.dt->joinOrder.empty());
     const auto firstTableId = state.dt->joinOrder[0];
     VELOX_CHECK(state.dt->startTables.BitSet::contains(firstTableId));
 
@@ -1917,6 +1934,10 @@ void Optimization::makeJoins(PlanState& state) {
     });
     // First tables that don't have joins and with larger cardinality.
     std::ranges::sort(firstTables);
+    if (!options_.costJoinOrder()) {
+      VELOX_DCHECK(!firstTables.empty());
+      firstTables.resize(1);
+    }
   }
 
   for (auto [maybeJoins, score, from] : firstTables) {
