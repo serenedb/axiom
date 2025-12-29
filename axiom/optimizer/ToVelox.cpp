@@ -278,28 +278,6 @@ velox::core::TypedExprPtr makeKey(const velox::TypePtr& type, T v) {
       type, velox::Variant(v));
 }
 
-velox::core::TypedExprPtr createArrayForInList(
-    const Call& call,
-    const velox::TypePtr& elementType) {
-  std::vector<velox::Variant> arrayElements;
-  arrayElements.reserve(call.args().size() - 1);
-  for (size_t i = 1; i < call.args().size(); ++i) {
-    auto arg = call.args().at(i);
-    VELOX_USER_CHECK(
-        elementType->equivalent(*arg->value().type),
-        "All elements of the IN list must have the same type got {} and {}",
-        elementType->toString(),
-        arg->value().type->toString());
-    VELOX_USER_CHECK(arg->is(PlanType::kLiteralExpr));
-    arrayElements.push_back(arg->as<Literal>()->literal());
-  }
-  auto arrayVector = variantToVector(
-      ARRAY(elementType),
-      velox::Variant::array(arrayElements),
-      queryCtx()->optimization()->evaluator()->pool());
-  return std::make_shared<velox::core::ConstantTypedExpr>(arrayVector);
-}
-
 velox::core::TypedExprPtr stepToMapSubscript(
     Step step,
     velox::core::TypedExprPtr arg,
@@ -421,6 +399,51 @@ std::vector<velox::core::TypedExprPtr> ToVelox::toTypedExprs(
   return typedExprs;
 }
 
+velox::core::TypedExprPtr ToVelox::tryOptimizeIn(const Call& call) {
+  if (call.name() != SpecialFormCallNames::kIn) {
+    return nullptr;
+  }
+  VELOX_USER_CHECK_GE(call.args().size(), 2);
+
+  if (call.args().size() == 2) {
+    return std::make_shared<velox::core::CallTypedExpr>(
+        velox::BOOLEAN(),
+        std::vector{toTypedExpr(call.args()[0]), toTypedExpr(call.args()[1])},
+        FunctionRegistry::instance()->equality());
+  }
+
+  std::vector<velox::Variant> arrayElements;
+  arrayElements.reserve(call.args().size() - 1);
+  const auto* elementType = call.args()[0]->value().type;
+  for (size_t i = 1; i < call.args().size(); ++i) {
+    const auto* arg = call.args()[i];
+    VELOX_USER_CHECK(
+        elementType->equivalent(*arg->value().type),
+        "All elements of the IN list must have the same type got {} and {}",
+        elementType->toString(),
+        arg->value().type->toString());
+    if (!arg->is(PlanType::kLiteralExpr)) {
+      return nullptr;
+    }
+    VELOX_USER_CHECK(arg->is(PlanType::kLiteralExpr));
+    arrayElements.push_back(arg->as<Literal>()->literal());
+  }
+
+  velox::core::TypedExprPtr arrayVector =
+      std::make_shared<velox::core::ConstantTypedExpr>(variantToVector(
+          velox::ARRAY(toTypePtr(elementType)),
+          velox::Variant::array(arrayElements),
+          queryCtx()->optimization()->evaluator()->pool()));
+
+  return std::make_shared<velox::core::CallTypedExpr>(
+      velox::BOOLEAN(),
+      std::vector{
+          toTypedExpr(call.args()[0]),
+          std::move(arrayVector),
+      },
+      specialForm(lp::SpecialForm::kIn));
+}
+
 velox::core::TypedExprPtr ToVelox::toTypedExpr(ExprCP expr) {
   auto it = projectedExprs_.find(expr);
   if (it != projectedExprs_.end()) {
@@ -446,17 +469,15 @@ velox::core::TypedExprPtr ToVelox::toTypedExpr(ExprCP expr) {
           toTypePtr(expr->value().type), name);
     }
     case PlanType::kCallExpr: {
-      std::vector<velox::core::TypedExprPtr> inputs;
-      auto call = expr->as<Call>();
+      const auto* call = expr->as<Call>();
+      if (auto optimized = tryOptimizeIn(*call)) {
+        return optimized;
+      }
 
-      if (call->name() == SpecialFormCallNames::kIn) {
-        VELOX_USER_CHECK_GE(call->args().size(), 2);
-        inputs.push_back(toTypedExpr(call->args()[0]));
-        inputs.push_back(createArrayForInList(*call, inputs.back()->type()));
-      } else {
-        for (auto arg : call->args()) {
-          inputs.push_back(toTypedExpr(arg));
-        }
+      std::vector<velox::core::TypedExprPtr> inputs;
+      inputs.reserve(call->args().size());
+      for (auto arg : call->args()) {
+        inputs.push_back(toTypedExpr(arg));
       }
 
       if (auto form = SpecialFormCallNames::tryFromCallName(call->name())) {
