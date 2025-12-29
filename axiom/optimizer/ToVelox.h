@@ -87,6 +87,8 @@ class ToVelox {
   void filterUpdated(BaseTableCP baseTable, bool updateSelectivity = true);
 
  private:
+  velox::core::TypedExprPtr tryOptimizeIn(const Call& call);
+
   velox::core::FieldAccessTypedExprPtr toFieldRef(ExprCP expr);
 
   std::vector<velox::core::FieldAccessTypedExprPtr> toFieldRefs(
