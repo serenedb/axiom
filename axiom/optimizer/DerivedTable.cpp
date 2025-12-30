@@ -69,11 +69,11 @@ void fillJoins(
     const Equivalence& equivalence,
     EdgeSet& edges,
     DerivedTableP dt) {
-  for (auto& other : equivalence.columns) {
+  equivalence.columns.forEach<Column>([&](ColumnCP other) {
     if (addEdge(edges, column, other)) {
       addJoinEquality(column->as<Column>(), other->as<Column>(), dt->joins);
     }
-  }
+  });
 }
 } // namespace
 
@@ -102,9 +102,9 @@ void DerivedTable::addImpliedJoins() {
           auto leftEq = leftKey->as<Column>()->equivalence();
           auto rightEq = rightKey->as<Column>()->equivalence();
           if (rightEq && leftEq) {
-            for (auto& left : leftEq->columns) {
+            leftEq->columns.forEach<Column>([&](ColumnCP left) {
               fillJoins(left, *rightEq, edges, this);
-            }
+            });
           } else if (leftEq) {
             fillJoins(rightKey, *leftEq, edges, this);
           } else if (rightEq) {
