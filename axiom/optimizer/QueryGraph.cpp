@@ -45,25 +45,25 @@ const char* SpecialFormCallNames::kIn = "__in";
 void Column::equals(ColumnCP other) const {
   if (!equivalence_ && !other->equivalence_) {
     auto* equiv = make<Equivalence>();
-    equiv->columns.push_back(this);
-    equiv->columns.push_back(other);
+    equiv->columns.add(this);
+    equiv->columns.add(other);
     equivalence_ = equiv;
     other->equivalence_ = equiv;
     return;
   }
   if (!other->equivalence_) {
     other->equivalence_ = equivalence_;
-    equivalence_->columns.push_back(other);
+    equivalence_->columns.add(other);
     return;
   }
   if (!equivalence_) {
     other->equals(this);
     return;
   }
-  for (auto& column : other->equivalence_->columns) {
-    equivalence_->columns.push_back(column);
+  other->equivalence_->columns.forEach<Column>([&](ColumnCP column) {
+    equivalence_->columns.add(column);
     column->equivalence_ = equivalence_;
-  }
+  });
 }
 
 std::string Column::toString() const {
