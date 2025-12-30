@@ -433,7 +433,7 @@ class Lambda : public Expr {
 /// Represens a set of transitively equal columns.
 struct Equivalence {
   /// Each element has a direct or implied equality edge to every other.
-  ColumnVector columns;
+  PlanObjectSet columns;
 };
 
 /// The join structure is described as a tree of derived tables with
