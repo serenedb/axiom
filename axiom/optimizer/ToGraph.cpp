@@ -874,7 +874,7 @@ ExprCP ToGraph::deduppedCall(
     ExprVector args,
     FunctionSet flags) {
   canonicalizeCall(name, args);
-  ExprDedupKey key = {name, args};
+  ExprDedupKey key = {name, args, value.type};
 
   auto [it, emplaced] = functionDedup_.try_emplace(key);
   if (it->second) {
