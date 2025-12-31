@@ -42,7 +42,7 @@ struct ExprDedupHasher {
     for (auto& a : key.args) {
       h = velox::bits::hashMix(h, folly::hasher<ExprCP>()(a));
     }
-    h = velox::bits::hashMix(h, folly::hasher<const axiom/optimizer/ToGraph.hvelox::Type*>()(key.type));
+    h = velox::bits::hashMix(h, std::hash<const velox::Type*>()(key.type));
     return h;
   }
 };
