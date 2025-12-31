@@ -116,8 +116,17 @@ std::string Call::toString() const {
   std::stringstream out;
   out << name_ << "(";
   for (auto i = 0; i < args_.size(); ++i) {
-    out << args_[i]->toString() << (i == args_.size() - 1 ? ")" : ", ");
+    out << args_[i]->toString();
+    if (i != args_.size() - 1) {
+      out << ", ";
+    }
   }
+
+  if (name_ == SpecialFormCallNames::kCast) {
+    out << " AS " << value().type->toString();
+  }
+
+  out << ")";
   return out.str();
 }
 
