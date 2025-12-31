@@ -27,9 +27,11 @@ namespace facebook::axiom::optimizer {
 struct ExprDedupKey {
   Name func;
   CPSpan<Expr> args;
+  const velox::Type* type; // makes sence for functions like cast
 
   bool operator==(const ExprDedupKey& other) const {
-    return func == other.func && std::ranges::equal(args, other.args);
+    return func == other.func && std::ranges::equal(args, other.args) &&
+        type == other.type;
   }
 };
 
@@ -40,6 +42,7 @@ struct ExprDedupHasher {
     for (auto& a : key.args) {
       h = velox::bits::hashMix(h, folly::hasher<ExprCP>()(a));
     }
+    h = velox::bits::hashMix(h, std::hash<const velox::Type*>()(key.type));
     return h;
   }
 };
