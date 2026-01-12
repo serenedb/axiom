@@ -27,7 +27,7 @@ class ConnectorSession final {
  public:
   explicit ConnectorSession(
       std::string queryId,
-      std::shared_ptr<const velox::config::IConfig> config = {})
+      std::shared_ptr<velox::config::IConfig> config = {})
       : queryId_{std::move(queryId)}, config_{std::move(config)} {}
 
   const std::string& queryId() const {
@@ -40,7 +40,7 @@ class ConnectorSession final {
 
  private:
   const std::string queryId_;
-  const std::shared_ptr<const velox::config::IConfig> config_;
+  const std::shared_ptr<velox::config::IConfig> config_;
 };
 
 using ConnectorSessionPtr = std::shared_ptr<ConnectorSession>;
