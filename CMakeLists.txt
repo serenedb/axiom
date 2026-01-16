@@ -18,6 +18,8 @@ project(axiom)
 
 list(PREPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/CMake" "${PROJECT_SOURCE_DIR}/../velox/CMake")
 
+set(VELOX_ENABLE_HIVE_CONNECTOR OFF)
+
 add_subdirectory(axiom/common)
 # TODO(mbkkt) add_subdirectory(axiom/sql/presto)
 add_subdirectory(axiom/logical_plan)
