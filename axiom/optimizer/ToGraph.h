@@ -160,13 +160,9 @@ class ToGraph {
   // to the left.
   void canonicalizeCall(Name& name, ExprVector& args);
 
-  // Converts 'plan' to PlanObjects and records join edges into
-  // 'currentDt_'. Wraps 'node' in a new Derived table f 'node' does not match
-  // allowedInDt or 'node' is an outer join and 'excludeOuterJoins' is true.
   void makeQueryGraph(
       const logical_plan::LogicalPlanNode& node,
-      uint64_t allowedInDt,
-      bool excludeOuterJoins = false);
+      uint64_t allowedInDt);
 
   PlanObjectCP findLeaf(const logical_plan::LogicalPlanNode* node) {
     auto* leaf = planLeaves_[node];

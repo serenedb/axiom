@@ -1686,6 +1686,11 @@ void ToGraph::addJoin(const lp::JoinNode& join, uint64_t allowedInDt) {
   VELOX_DCHECK(!currentDt_->tables.empty());
   auto* rightTable = !isInner ? currentDt_->tables.back() : nullptr;
 
+  exprSources_ = {join.left().get(), join.right().get()};
+  SCOPE_EXIT {
+    exprSources_.clear();
+  };
+
   ExprVector conjuncts;
   translateConjuncts(join.condition(), conjuncts);
 
@@ -1927,7 +1932,10 @@ void ToGraph::makeValuesTable(const lp::ValuesNode& values) {
 }
 
 void ToGraph::addProjection(const lp::ProjectNode& project) {
-  exprSource_ = project.onlyInput().get();
+  exprSources_ = {project.onlyInput().get()};
+  SCOPE_EXIT {
+    exprSources_.clear();
+  };
 
   const auto& names = project.names();
   const auto& exprs = project.expressions();
@@ -2345,7 +2353,10 @@ void ToGraph::applySampling(
 void ToGraph::addFilter(
     const lp::LogicalPlanNode& input,
     const lp::ExprPtr& predicate) {
-  exprSource_ = &input;
+  exprSources_ = {&input};
+  SCOPE_EXIT {
+    exprSources_.clear();
+  };
 
   processSubqueries(input, predicate);
 
@@ -2611,8 +2622,7 @@ DerivedTableP ToGraph::makeQueryGraph(const lp::LogicalPlanNode& logicalPlan) {
 
 void ToGraph::makeQueryGraph(
     const lp::LogicalPlanNode& node,
-    uint64_t allowedInDt,
-    bool excludeOuterJoins) {
+    uint64_t allowedInDt) {
   if (!contains(allowedInDt, node.kind())) {
     if (node.kind() == lp::NodeKind::kSort) {
       // Sort not allowed doesn't mean we need to wrap it in DT,
@@ -2621,12 +2631,6 @@ void ToGraph::makeQueryGraph(
     } else {
       wrapInDt(node, /*unordered=*/false);
     }
-    return;
-  }
-
-  if (excludeOuterJoins && node.is(lp::NodeKind::kJoin) &&
-      node.as<lp::JoinNode>()->joinType() != lp::JoinType::kInner) {
-    wrapInDt(node);
     return;
   }
 
