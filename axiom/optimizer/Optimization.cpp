@@ -1262,14 +1262,16 @@ void Optimization::tryMergeJoin(
   state.addNextJoin(&candidate, join, toTry);
 }
 
+template <typename Reshuffle>
 void Optimization::joinByKeys(
     const JoinCandidate& candidate,
-    PlanState& state,
-    const PlanCost& buildCost,
     const JoinSide& probe,
     RelationOpPtr probeInput,
+    PlanState& state,
     const JoinSide& build,
     RelationOpPtr buildInput,
+    PlanState& memoState,
+    const Reshuffle& reshuffle,
     float lrFanout,
     float rlFanout,
     std::vector<NextJoin>& toTry) {
@@ -1331,14 +1333,16 @@ void Optimization::joinByKeys(
 
   VELOX_DCHECK_EQ(probeKeys.size(), buildKeys.size());
 
+  reshuffle(probeInput, probeKeys, state, buildInput, buildKeys, memoState);
+
   const auto fanout = fanoutJoinTypeLimit(
       joinType,
       lrFanout,
       rlFanout,
-      buildCost.cardinality / state.cost.cardinality);
+      memoState.cost.cardinality / state.cost.cardinality);
 
   state.columns = std::move(columnSet);
-  state.cost.cost += buildCost.cost;
+  state.cost.cost += memoState.cost.cost;
 
   tryMergeJoin(
       candidate,
@@ -1422,45 +1426,53 @@ void Optimization::probeJoin(
   auto buildPlan = makePlan(
       *state.dt, memoKey, forBuild, {}, candidate.existsFanout, needsShuffle);
 
-  PlanState buildState(state.optimization, state.dt, buildPlan);
+  PlanState memoState(state.optimization, state.dt, buildPlan);
   RelationOpPtr buildInput = buildPlan->op;
   RelationOpPtr probeInput = plan;
 
-  if (!isSingleWorker_) {
-    if (!partKeys.empty()) {
-      if (needsShuffle) {
-        if (copartition.empty()) {
-          for (auto i : partKeys) {
-            copartition.push_back(build.keys[i]);
+  auto reshuffle = [&](auto& probeInput,
+                       const auto& probeKeys,
+                       auto& state,
+                       auto& buildInput,
+                       const auto& buildKeys,
+                       auto& memoState) {
+    if (!isSingleWorker_) {
+      if (!partKeys.empty()) {
+        if (needsShuffle) {
+          if (copartition.empty()) {
+            for (auto i : partKeys) {
+              copartition.push_back(build.keys[i]);
+            }
           }
+          Distribution distribution{
+              probeInput->distribution().distributionType, copartition};
+          buildInput = make<Repartition>(buildInput, std::move(distribution));
+          memoState.addCost(*buildInput);
         }
-        Distribution distribution{
-            probeInput->distribution().distributionType, copartition};
-        buildInput = make<Repartition>(buildInput, std::move(distribution));
-        buildState.addCost(*buildInput);
+      } else if (
+          joinType != velox::core::JoinType::kRight &&
+          joinType != velox::core::JoinType::kFull &&
+          isSingleWorkerSize(*buildInput)) {
+        buildInput = make<Repartition>(buildInput, Distribution::broadcast());
+        memoState.addCost(*buildInput);
+      } else {
+        // The probe gets shuffled to align with build. If build is not
+        // partitioned on its keys, shuffle the build too.
+        alignJoinSides(
+            buildInput, buildKeys, memoState, probeInput, probeKeys, state);
       }
-    } else if (
-        joinType != velox::core::JoinType::kRight &&
-        joinType != velox::core::JoinType::kFull &&
-        isSingleWorkerSize(*buildInput)) {
-      buildInput = make<Repartition>(buildInput, Distribution::broadcast());
-      buildState.addCost(*buildInput);
-    } else {
-      // The probe gets shuffled to align with build. If build is not
-      // partitioned on its keys, shuffle the build too.
-      alignJoinSides(
-          buildInput, build.keys, buildState, probeInput, probe.keys, state);
     }
-  }
+  };
 
   joinByKeys(
       candidate,
-      state,
-      buildState.cost,
       probe,
       probeInput,
+      state,
       build,
       buildInput,
+      memoState,
+      reshuffle,
       candidate.fanout,
       candidate.join->rlFanout(),
       toTry);
@@ -1509,26 +1521,34 @@ void Optimization::buildJoin(
   auto probePlan = makePlan(
       *state.dt, memoKey, forProbe, {}, candidate.existsFanout, needsShuffle);
 
-  PlanState probeState(state.optimization, state.dt, probePlan);
+  PlanState memoState(state.optimization, state.dt, probePlan);
   RelationOpPtr probeInput = probePlan->op;
   RelationOpPtr buildInput = plan;
 
-  if (!isSingleWorker_) {
-    // The build gets shuffled to align with probe. If probe is not
-    // partitioned on its keys, shuffle the probe too.
-    alignJoinSides(
-        probeInput, probe.keys, probeState, buildInput, build.keys, state);
-  }
+  auto reshuffle = [&](auto& probeInput,
+                       const auto& probeKeys,
+                       auto& state,
+                       auto& buildInput,
+                       const auto& buildKeys,
+                       auto& memoState) {
+    if (!isSingleWorker_) {
+      // The build gets shuffled to align with probe. If probe is not
+      // partitioned on its keys, shuffle the probe too.
+      alignJoinSides(
+          probeInput, probeKeys, memoState, buildInput, buildKeys, state);
+    }
+    std::swap(state.cost, memoState.cost);
+  };
 
-  std::swap(state.cost, probeState.cost);
   joinByKeys(
       candidate,
-      state,
-      probeState.cost,
       probe,
       probeInput,
+      state,
       build,
       buildInput,
+      memoState,
+      reshuffle,
       candidate.join->rlFanout(),
       candidate.fanout,
       toTry);
@@ -1584,11 +1604,11 @@ void Optimization::crossJoin(
   auto buildPlan = makePlan(
       *state.dt, memoKey, forBuild, {}, candidate.existsFanout, needsShuffle);
 
-  PlanState buildState(state.optimization, state.dt, buildPlan);
+  PlanState memoState(state.optimization, state.dt, buildPlan);
   RelationOpPtr buildInput = buildPlan->op;
   if (needsShuffle) {
     buildInput = make<Repartition>(buildInput, forBuild);
-    buildState.addCost(*buildInput);
+    memoState.addCost(*buildInput);
   }
 
   const bool probeOnly = joinType == velox::core::JoinType::kLeftSemiProject;
@@ -1627,7 +1647,7 @@ void Optimization::crossJoin(
   }
 
   state.columns = std::move(columnSet);
-  state.cost.cost += buildState.cost.cost;
+  state.cost.cost += memoState.cost.cost;
 
   RelationOp* join = Join::makeNestedLoopJoin(
       plan,

@@ -289,14 +289,16 @@ class Optimization {
       const ColumnVector& columns,
       std::vector<NextJoin>& toTry) const;
 
+  template <typename Reshuffle>
   void joinByKeys(
       const JoinCandidate& candidate,
-      PlanState& state,
-      const PlanCost& buildCost,
       const JoinSide& probe,
       RelationOpPtr probeInput,
+      PlanState& state,
       const JoinSide& build,
       RelationOpPtr buildInput,
+      PlanState& memoState,
+      const Reshuffle& reshuffle,
       float lrFanout,
       float rlFanout,
       std::vector<NextJoin>& toTry);
