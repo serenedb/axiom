@@ -354,57 +354,6 @@ PlanBuilder& PlanBuilder::dropHiddenColumns() {
   return *this;
 }
 
-PlanBuilder& PlanBuilder::dropHiddenColumns() {
-  const auto size = numOutput();
-  const auto& inputType = node_->outputType();
-
-  bool hasHiddenColumns = false;
-  for (const auto& name : inputType->names()) {
-    if (outputMapping_->isHidden(name)) {
-      hasHiddenColumns = true;
-      break;
-    }
-  }
-
-  if (!hasHiddenColumns) {
-    return *this;
-  }
-
-  std::vector<std::string> outputNames;
-  outputNames.reserve(size);
-
-  std::vector<ExprPtr> exprs;
-  exprs.reserve(size);
-
-  auto newOutputMapping = std::make_shared<NameMappings>();
-
-  for (auto i = 0; i < inputType->size(); i++) {
-    const auto& id = inputType->nameOf(i);
-
-    if (outputMapping_->isHidden(id)) {
-      continue;
-    }
-
-    outputNames.push_back(id);
-
-    const auto names = outputMapping_->reverseLookup(id);
-    for (const auto& name : names) {
-      newOutputMapping->add(name, id);
-    }
-
-    exprs.push_back(
-        std::make_shared<InputReferenceExpr>(inputType->childAt(i), id));
-  }
-
-  node_ = std::make_shared<ProjectNode>(
-      nextId(), std::move(node_), std::move(outputNames), std::move(exprs));
-
-  newOutputMapping->enableUnqualifiedAccess();
-  outputMapping_ = std::move(newOutputMapping);
-
-  return *this;
-}
-
 PlanBuilder& PlanBuilder::filter(const std::string& predicate) {
   VELOX_USER_CHECK_NOT_NULL(node_, "Filter node cannot be a leaf node");
 
