@@ -102,9 +102,8 @@ void DerivedTable::addImpliedJoins() {
           auto leftEq = leftKey->as<Column>()->equivalence();
           auto rightEq = rightKey->as<Column>()->equivalence();
           if (rightEq && leftEq) {
-            leftEq->columns.forEach<Column>([&](ColumnCP left) {
-              fillJoins(left, *rightEq, edges, this);
-            });
+            leftEq->columns.forEach<Column>(
+                [&](ColumnCP left) { fillJoins(left, *rightEq, edges, this); });
           } else if (leftEq) {
             fillJoins(rightKey, *leftEq, edges, this);
           } else if (rightEq) {
