@@ -16,7 +16,7 @@ dt1: n_name, revenue
     t5 INNER t6 ON t5.s_nationkey = t6.n_nationkey
     t6 INNER t7 ON t6.n_regionkey = t7.r_regionkey
     t2 INNER t6 ON t2.c_nationkey = t6.n_nationkey
-  syntactic join order: 9, 21, 41, 53, 60, 67
+  syntactic join order: 11, 25, 47, 61, 70, 79
   aggregates: sum(multiply(t4.l_extendedprice, minus(1, t4.l_discount))) AS revenue
   grouping keys: t6.n_name
   orderBy: dt1.revenue DESC NULLS LAST
@@ -53,10 +53,10 @@ Project (redundant) -> dt1.n_name, dt1.revenue
     dt1.revenue := dt1.revenue
   OrderBy -> t6.n_name, dt1.revenue
     Aggregation (t6.n_name) -> t6.n_name, dt1.revenue
-        dt1.revenue := sum(dt1.__p91)
-      Project -> t6.n_name, dt1.__p91
+        dt1.revenue := sum(dt1.__p103)
+      Project -> t6.n_name, dt1.__p103
           t6.n_name := t6.n_name
-          dt1.__p91 := multiply(t4.l_extendedprice, minus(1, t4.l_discount))
+          dt1.__p103 := multiply(t4.l_extendedprice, minus(1, t4.l_discount))
         Join INNER Hash -> t4.l_extendedprice, t4.l_discount, t6.n_name
             t2.c_nationkey = t5.s_nationkey
             t4.l_suppkey = t5.s_suppkey
@@ -99,8 +99,8 @@ Executable Velox plan:
 
 Fragment 0:  numWorkers=0:
 -- OrderBy[18][revenue DESC NULLS LAST] -> n_name:VARCHAR, revenue:DOUBLE
-  -- Aggregation[17][SINGLE [n_name] revenue := sum("dt1.__p91")] -> n_name:VARCHAR, revenue:DOUBLE
-    -- Project[16][expressions: (n_name:VARCHAR, "n_name"), (dt1.__p91:DOUBLE, multiply("l_extendedprice",minus(1,"l_discount")))] -> n_name:VARCHAR, "dt1.__p91":DOUBLE
+  -- Aggregation[17][SINGLE [n_name] revenue := sum("dt1.__p103")] -> n_name:VARCHAR, revenue:DOUBLE
+    -- Project[16][expressions: (n_name:VARCHAR, "n_name"), (dt1.__p103:DOUBLE, multiply("l_extendedprice",minus(1,"l_discount")))] -> n_name:VARCHAR, "dt1.__p103":DOUBLE
       -- HashJoin[15][INNER c_nationkey=s_nationkey AND l_suppkey=s_suppkey] -> l_extendedprice:DOUBLE, l_discount:DOUBLE, n_name:VARCHAR
         -- HashJoin[8][INNER l_orderkey=o_orderkey] -> c_nationkey:BIGINT, l_suppkey:BIGINT, l_extendedprice:DOUBLE, l_discount:DOUBLE, n_nationkey:BIGINT, n_name:VARCHAR
           -- TableScan[0][table: lineitem, data columns: ROW<l_orderkey:BIGINT,l_partkey:BIGINT,l_suppkey:BIGINT,l_linenumber:INTEGER,l_quantity:DOUBLE,l_extendedprice:DOUBLE,l_discount:DOUBLE,l_tax:DOUBLE,l_returnflag:VARCHAR,l_linestatus:VARCHAR,l_shipdate:DATE,l_commitdate:DATE,l_receiptdate:DATE,l_shipinstruct:VARCHAR,l_shipmode:VARCHAR,l_comment:VARCHAR>] -> l_orderkey:BIGINT, l_suppkey:BIGINT, l_extendedprice:DOUBLE, l_discount:DOUBLE
