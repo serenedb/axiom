@@ -69,7 +69,7 @@ void Column::equals(ColumnCP other) const {
 std::string Column::toString() const {
   const auto* opt = queryCtx()->optimization();
   if (!opt->cnamesInExpr() || relation_ == nullptr) {
-    return name_;
+    return std::string{name_};
   }
 
   Name cname;
@@ -485,11 +485,11 @@ PlanObjectSet Expr::allTables() const {
 }
 
 Column::Column(
-    Name name,
+    std::string_view name,
     PlanObjectCP relation,
     const Value& value,
-    Name alias,
-    Name nameInTable,
+    std::string_view alias,
+    std::string_view nameInTable,
     ColumnCP topColumn,
     PathCP path)
     : Expr(PlanType::kColumnExpr, value),
@@ -508,7 +508,7 @@ Column::Column(
       schemaColumn_ = topColumn_->schemaColumn_;
     } else {
       schemaColumn_ = relation->as<BaseTable>()->schemaTable->findColumn(
-          nameInTable ? nameInTable : name_);
+          nameInTable.empty() ? name_ : nameInTable);
     }
     VELOX_CHECK(schemaColumn_);
   }

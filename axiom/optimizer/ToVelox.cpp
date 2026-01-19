@@ -71,7 +71,8 @@ std::vector<velox::common::Subfield> columnSubfields(
     const auto& steps = path->steps();
     std::vector<std::unique_ptr<velox::common::Subfield::PathElement>> elements;
     elements.push_back(
-        std::make_unique<velox::common::Subfield::NestedField>(columnName));
+        std::make_unique<velox::common::Subfield::NestedField>(
+            std::string{columnName}));
     bool first = true;
     for (auto& step : steps) {
       switch (step.kind) {
@@ -979,7 +980,7 @@ velox::RowTypePtr ToVelox::subfieldPushdownScanType(
       }
       top.add(topColumn);
       topColumns.push_back(topColumn);
-      names.push_back(topColumn->name());
+      names.push_back(std::string{topColumn->name()});
       if (isMapAsStruct(baseTable->schemaTable->name(), topColumn->name())) {
         types.push_back(skylineStruct(baseTable, topColumn));
         typeMap[topColumn] = types.back();
@@ -992,7 +993,7 @@ velox::RowTypePtr ToVelox::subfieldPushdownScanType(
       }
       top.add(column);
       topColumns.push_back(column);
-      names.push_back(column->name());
+      names.push_back(std::string{column->name()});
       types.push_back(toTypePtr(column->value().type));
     }
   }
@@ -1060,8 +1061,9 @@ velox::core::TypedExprPtr toAndWithAliases(
   std::unordered_map<std::string, velox::core::TypedExprPtr> mapping;
   for (const auto& column : baseTable->columns) {
     auto name = column->name();
-    mapping[name] = std::make_shared<velox::core::FieldAccessTypedExpr>(
-        toTypePtr(column->value().type), column->outputName());
+    mapping[std::string{name}] =
+        std::make_shared<velox::core::FieldAccessTypedExpr>(
+            toTypePtr(column->value().type), column->outputName());
 
     if (usedFieldNames.contains(name)) {
       if (!columnSet.contains(column)) {
@@ -1123,10 +1125,10 @@ velox::core::PlanNodePtr ToVelox::makeScan(
         columnSubfields(scan.baseTable, column->id());
     // No correlation name in scan output if pushed down subfield projection
     // follows.
-    auto scanColumnName =
-        isSubfieldPushdown ? column->name() : column->outputName();
+    std::string scanColumnName =
+        isSubfieldPushdown ? std::string{column->name()} : column->outputName();
     assignments[scanColumnName] = scan.index->layout->createColumnHandle(
-        connectorSession, column->name(), std::move(subfields));
+        connectorSession, std::string{column->name()}, std::move(subfields));
   }
 
   velox::core::PlanNodePtr result =

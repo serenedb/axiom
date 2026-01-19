@@ -37,6 +37,14 @@ using NameMap = std::unordered_map<
     std::equal_to<Name>,
     QGAllocator<std::pair<const Name, T>>>;
 
+template <typename T>
+using NameSVMap = std::unordered_map<
+    std::string_view,
+    T,
+    std::hash<std::string_view>,
+    std::equal_to<std::string_view>,
+    QGAllocator<std::pair<const std::string_view, T>>>;
+
 /// Represents constraints on a column value or intermediate result.
 struct Value {
   Value(const velox::Type* type, float cardinality)
@@ -274,7 +282,7 @@ struct SchemaTable {
       Distribution distribution,
       ColumnVector columns);
 
-  ColumnCP findColumn(Name name) const;
+  ColumnCP findColumn(std::string_view name) const;
 
   /// True if 'columns' match no more than one row.
   bool isUnique(CPSpan<Column> columns) const;
@@ -298,7 +306,7 @@ struct SchemaTable {
   const float cardinality;
 
   // Lookup from name to column.
-  NameMap<ColumnCP> columns;
+  NameSVMap<ColumnCP> columns;
 
   // All indices. Must contain at least one.
   QGVector<ColumnGroupCP> columnGroups;

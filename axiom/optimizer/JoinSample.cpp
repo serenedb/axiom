@@ -142,7 +142,7 @@ std::shared_ptr<runner::LocalRunner> prepareSampleRunner(
   ExprCP hash =
       make<Call>(toName(kHashMix), bigintValue(), hashes, FunctionSet{});
 
-  ColumnCP hashColumn = make<Column>(toName("hash"), nullptr, hash->value());
+  ColumnCP hashColumn = make<Column>(toNameSV("hash"), nullptr, hash->value());
   RelationOpPtr project = make<Project>(
       scan, ExprVector{hash}, ColumnVector{hashColumn}, /*redundant=*/false);
 

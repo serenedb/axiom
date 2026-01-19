@@ -130,7 +130,7 @@ void ToGraph::addDtColumn(DerivedTableP dt, std::string_view name) {
       inner->as<Column>()->outputName() == name) {
     outer = inner->as<Column>();
   } else {
-    const auto* columnName = toName(name);
+    auto columnName = toNameSV(name);
     outer = make<Column>(columnName, dt, inner->value(), columnName);
   }
   dt->columns.push_back(outer);
@@ -1071,7 +1071,7 @@ ExprCP ToGraph::translateLambda(const lp::LambdaExpr* lambda) {
   for (uint32_t i = 0; i < signature.size(); ++i) {
     const auto& name = signature.nameOf(i);
     const auto* column = make<Column>(
-        toName(name), nullptr, Value{toType(signature.childAt(i)), 1});
+        toNameSV(name), nullptr, Value{toType(signature.childAt(i)), 1});
     args.push_back(column);
     lambdaSignature_[name] = column;
   }
@@ -1287,7 +1287,7 @@ void ToGraph::addUnnest(const lp::UnnestNode& unnest) {
       // columns average expected number of elements per unnested element.
       // Other Value properties also should be computed.
       Value value{unnestedType, maxCardinality};
-      const auto* columnName = toName(unnestedNames[j]);
+      auto columnName = toNameSV(unnestedNames[j]);
       auto* column = make<Column>(columnName, unnestTable, value, columnName);
       unnestTable->columns.push_back(column);
       renames_[columnName] = column;
@@ -1358,7 +1358,7 @@ AggregationPlanCP ToGraph::translateAggregation(const lp::AggregateNode& agg) {
   folly::F14FastMap<ExprCP, ColumnCP> uniqueGroupingKeys;
 
   for (auto i = 0; i < agg.groupingKeys().size(); ++i) {
-    auto name = toName(agg.outputType()->nameOf(i));
+    auto name = toNameSV(agg.outputType()->nameOf(i));
     auto* key = translateExpr(agg.groupingKeys()[i]);
 
     auto it = uniqueGroupingKeys.try_emplace(key).first;
@@ -1484,7 +1484,7 @@ AggregationPlanCP ToGraph::translateAggregation(const lp::AggregateNode& agg) {
           "ORDER BY option for aggregation is supported only in single worker, single thread mode");
     }
 
-    auto name = toName(agg.outputNames()[channel]);
+    auto name = toNameSV(agg.outputNames()[channel]);
 
     AggregateDedupKey key{
         aggName, isDistinct, condition, args, orderKeys, orderTypes};
@@ -1790,11 +1790,11 @@ SubfieldProjections makeSubfieldColumns(
     Value value(type, cardinality);
     auto name = fmt::format("{}.{}", column->name(), path->toString());
     auto* subcolumn = make<Column>(
-        toName(name),
+        toNameSV(name),
         &baseTable,
         value,
-        /*alias=*/nullptr,
-        /*nameInTable=*/nullptr,
+        /*alias=*/std::string_view{},
+        /*nameInTable=*/std::string_view{},
         column,
         path);
     baseTable.columns.push_back(subcolumn);
@@ -1819,7 +1819,7 @@ void ToGraph::makeBaseTable(const lp::TableScanNode& tableScan) {
     VELOX_DCHECK_LT(i, type->size());
 
     const auto& name = names[i];
-    const auto* columnName = toName(name);
+    auto columnName = toNameSV(name);
     auto schemaColumn = schemaTable.findColumn(columnName);
     auto value = schemaColumn->value();
     auto* column = make<Column>(
@@ -1922,7 +1922,7 @@ void ToGraph::makeValuesTable(const lp::ValuesNode& values) {
 
     const auto& name = names[i];
     Value value{toType(type->childAt(i)), cardinality};
-    const auto* columnName = toName(name);
+    auto columnName = toNameSV(name);
     auto* column = make<Column>(columnName, valuesTable, value, columnName);
     valuesTable->columns.push_back(column);
 
@@ -2012,7 +2012,7 @@ DerivedTableP ToGraph::translateSubquery(
         subqueryExprs.push_back(inner);
         ColumnCP outer = inner;
         if (relation != subqueryDt) {
-          const auto* columnName = toName(inner->outputName());
+          auto columnName = toNameSV(inner->outputName());
           outer =
               make<Column>(columnName, subqueryDt, inner->value(), columnName);
         }
@@ -2043,7 +2043,7 @@ DerivedTableP ToGraph::translateSubquery(
 }
 
 ColumnCP ToGraph::addMarkColumn() {
-  auto* mark = toName(fmt::format("__mark{}", markCounter_++));
+  auto mark = toNameSV(fmt::format("__mark{}", markCounter_++));
   auto* markColumn =
       make<Column>(mark, currentDt_, Value{toType(velox::BOOLEAN()), 2});
   return markColumn;
@@ -2455,7 +2455,7 @@ void ToGraph::addWrite(const lp::TableWriteNode& tableWrite) {
   auto& outputType = *tableWrite.outputType();
   for (uint32_t i = 0; i < outputType.size(); ++i) {
     const auto& outputName = outputType.nameOf(i);
-    const auto* outputColumn = toName(outputName);
+    auto outputColumn = toNameSV(outputName);
     renames_[outputName] = make<Column>(
         outputColumn,
         currentDt_,
@@ -2511,7 +2511,7 @@ void ToGraph::translateSetJoin(const lp::SetNode& set) {
   ColumnVector columns;
   for (auto i = 0; i < type->size(); ++i) {
     exprs.push_back(left->columns[i]);
-    const auto* columnName = toName(type->nameOf(i));
+    auto columnName = toNameSV(type->nameOf(i));
     columns.push_back(
         make<Column>(columnName, setDt, exprs.back()->value(), columnName));
     renames_[type->nameOf(i)] = columns.back();
@@ -2582,7 +2582,7 @@ void ToGraph::translateUnion(const lp::SetNode& set) {
 
       if (isFirstInput) {
         // The top dt has the same columns as all the unioned dts.
-        const auto* columnName = toName(name);
+        auto columnName = toNameSV(name);
         auto* outer =
             make<Column>(columnName, setDt, inner->value(), columnName);
         setDt->columns.push_back(outer);

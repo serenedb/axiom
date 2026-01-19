@@ -57,8 +57,24 @@ const char* QueryGraphContext::toName(std::string_view str) {
   return data;
 }
 
+std::string_view QueryGraphContext::toNameSV(std::string_view str) {
+  auto it = names_.find(str);
+  if (it != names_.end()) {
+    return *it;
+  }
+
+  char* data = allocator_.allocate(str.size() + 1)->begin(); // NOLINT
+  memcpy(data, str.data(), str.size());
+  data[str.size()] = 0;
+  return *names_.insert(std::string_view(data, str.size())).first;
+}
+
 Name toName(std::string_view string) {
   return queryCtx()->toName(string);
+}
+
+std::string_view toNameSV(std::string_view string) {
+  return queryCtx()->toNameSV(string);
 }
 
 const velox::Type* QueryGraphContext::toType(const velox::TypePtr& type) {

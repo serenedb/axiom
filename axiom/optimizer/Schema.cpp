@@ -57,7 +57,7 @@ ColumnGroupCP SchemaTable::addIndex(
           *this, layout, std::move(distribution), std::move(columns)));
 }
 
-ColumnCP SchemaTable::findColumn(Name name) const {
+ColumnCP SchemaTable::findColumn(std::string_view name) const {
   auto it = columns.find(name);
   VELOX_CHECK(it != columns.end(), "Column not found: {}", name);
   return it->second;
@@ -81,7 +81,7 @@ const SchemaTable& Schema::getTable(
         tableColumn->approxNumDistinct(
             static_cast<int64_t>(connectorTable.numRows())));
     Value value(toType(tableColumn->type()), cardinality);
-    auto* column = make<Column>(toName(columnName), nullptr, value);
+    auto* column = make<Column>(toNameSV(columnName), nullptr, value);
     schemaColumns[column->name()] = column;
   }
 
@@ -150,7 +150,7 @@ float baseSelectivity(PlanObjectCP object) {
 
 namespace {
 template <typename T>
-ColumnCP findColumnByName(const T& columns, Name name) {
+ColumnCP findColumnByName(const T& columns, std::string_view name) {
   for (auto column : columns) {
     if (column->is(PlanType::kColumnExpr) &&
         column->template as<Column>()->name() == name) {

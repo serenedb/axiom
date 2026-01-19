@@ -58,6 +58,7 @@ struct TypeComparer {
 /// Converts std::string to name used in query graph objects. raw pointer to
 /// arena allocated const chars.
 Name toName(std::string_view string);
+std::string_view toNameSV(std::string_view string);
 
 struct Plan;
 using PlanP = Plan*;
@@ -277,6 +278,8 @@ class QueryGraphContext {
   /// characters as 'str'. Allows comparing names by comparing
   /// pointers.
   Name toName(std::string_view str);
+
+  std::string_view toNameSV(std::string_view str);
 
   // Records the use of a TypePtr in optimization. Returns a canonical
   // representative of the type, allowing pointer equality for exact match.

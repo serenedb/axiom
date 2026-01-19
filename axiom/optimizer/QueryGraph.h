@@ -123,15 +123,15 @@ class Column : public Expr {
   /// @param nameInTable Name of the column in the BaseTable. Nullptr if
   /// 'relation' is not a BaseTable. Used to populate 'schemaColumn'.
   Column(
-      Name name,
+      std::string_view name,
       PlanObjectCP relation,
       const Value& value,
-      Name alias = nullptr,
-      Name nameInTable = nullptr,
+      std::string_view alias = {},
+      std::string_view nameInTable = {},
       ColumnCP topColumn = nullptr,
       PathCP path = nullptr);
 
-  Name name() const {
+  std::string_view name() const {
     return name_;
   }
 
@@ -141,7 +141,7 @@ class Column : public Expr {
     return relation_;
   }
 
-  Name alias() const {
+  std::string_view alias() const {
     return alias_;
   }
 
@@ -153,7 +153,7 @@ class Column : public Expr {
 
   /// Returns column name to use in the Velox plan.
   std::string outputName() const {
-    return alias_ != nullptr ? alias_ : toString();
+    return alias_.empty() ? toString() : std::string{alias_};
   }
 
   /// Asserts that 'this' and 'other' are joined on equality. This has a
@@ -180,13 +180,13 @@ class Column : public Expr {
 
  private:
   // Last part of qualified name.
-  Name name_;
+  std::string_view name_;
 
   // The defining BaseTable or DerivedTable.
   PlanObjectCP relation_;
 
   // Optional alias copied from the the logical plan.
-  Name alias_;
+  std::string_view alias_;
 
   // Equivalence class. Lists all columns directly or indirectly asserted equal
   // to 'this'.
@@ -1006,7 +1006,7 @@ class Window : public Call {
         spec_(std::move(spec)),
         frame_(frame),
         column_([&]() {
-          auto windowName = toName(fmt::format("{}_{}", name, id()));
+          auto windowName = toNameSV(fmt::format("{}_{}", name, id()));
           return make<Column>(windowName, dt, value, windowName);
         }()),
         ignoreNulls_(ignoreNulls) {

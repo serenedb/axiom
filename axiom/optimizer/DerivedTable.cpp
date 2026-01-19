@@ -206,7 +206,7 @@ std::pair<DerivedTableP, JoinEdgeP> makeExistsDtAndJoin(
     existsDt->import(super, firstExistsTable, existsDtKey.tables, {});
     for (auto& k : existsJoin->rightKeys()) {
       auto* existsColumn = make<Column>(
-          toName(fmt::format("{}.{}", existsDt->cname, k->toString())),
+          toNameSV(fmt::format("{}.{}", existsDt->cname, k->toString())),
           existsDt,
           k->value());
       existsDt->columns.push_back(existsColumn);

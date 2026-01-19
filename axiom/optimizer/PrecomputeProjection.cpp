@@ -56,7 +56,7 @@ ExprCP PrecomputeProjection::toColumn(
       toName(fmt::format("__p{}", expr->id())),
       dt_,
       expr->value(),
-      alias != nullptr ? toName(alias->outputName()) : nullptr);
+      alias != nullptr ? toNameSV(alias->outputName()) : std::string_view{});
 
   addToProject(expr, column);
   needsProject_ = true;
