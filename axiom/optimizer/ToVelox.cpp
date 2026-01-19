@@ -1061,9 +1061,11 @@ velox::core::TypedExprPtr toAndWithAliases(
   std::unordered_map<std::string, velox::core::TypedExprPtr> mapping;
   for (const auto& column : baseTable->columns) {
     auto name = column->name();
-    mapping[std::string{name}] =
+    auto [it, inserted] = mapping.emplace(
+        name,
         std::make_shared<velox::core::FieldAccessTypedExpr>(
-            toTypePtr(column->value().type), column->outputName());
+            toTypePtr(column->value().type), column->outputName()));
+    VELOX_DCHECK(inserted, "Duplicate column name: {}", name);
 
     if (usedFieldNames.contains(name)) {
       if (!columnSet.contains(column)) {
