@@ -2745,7 +2745,7 @@ void ToGraph::makeQueryGraph(
     } break;
     case lp::NodeKind::kTableWrite: {
       VELOX_DCHECK_EQ(allowedInDt, kAllAllowedInDt);
-      wrapInDt(*node.onlyInput(), /*unordered=*/true);
+      wrapInDt(*node.onlyInput(), /*unordered=*/false);
       addWrite(*node.as<lp::TableWriteNode>());
     } break;
     default:
