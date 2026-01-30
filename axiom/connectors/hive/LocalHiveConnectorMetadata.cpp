@@ -388,7 +388,6 @@ void LocalTable::makeDefaultLayout(
       /*partitioning=*/empty,
       /*orderColumns=*/empty,
       /*sortOrder=*/std::vector<SortOrder>{},
-      /*lookupKeys=*/empty,
       /*hivePartitionColumns=*/empty,
       metadata.fileFormat());
   layout->setFiles(std::move(files));
@@ -800,7 +799,6 @@ std::shared_ptr<LocalTable> createLocalTable(
       bucketedBy,
       sortedBy,
       sortOrders,
-      /*lookupKeys=*/std::vector<const Column*>{},
       partitionedBy,
       createTableOptions.fileFormat.value(),
       std::move(serdeParameters));
