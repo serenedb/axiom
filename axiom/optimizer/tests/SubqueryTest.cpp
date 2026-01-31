@@ -288,10 +288,10 @@ TEST_F(SubqueryTest, correlatedExists) {
             .hashJoin(
                 core::PlanMatcherBuilder().tableScan("region").build(),
                 velox::core::JoinType::kInner)
+            .project()
             .hashJoin(
                 core::PlanMatcherBuilder().tableScan("nation").build(),
                 velox::core::JoinType::kLeftSemiFilter)
-            .project()
             .build();
 
     {
